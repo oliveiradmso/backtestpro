@@ -70,6 +70,11 @@ dist_venda = st.number_input("Distorção mínima VENDA (%)", value=0.3)
 hora_inicio = st.time_input("Horário de entrada", value=time_obj(9, 0))
 hora_fim_pregao = st.time_input("Fechamento do pregão", value=time_obj(17, 30))
 
+# Filtro de data
+st.subheader("📅 Filtro de período")
+data_inicio = st.date_input("Data inicial", value=None)
+data_fim = st.date_input("Data final", value=None)
+
 # Botão para rodar
 if st.button("🚀 Rodar Backtest"):
     with st.spinner("Processando..."):
@@ -97,6 +102,16 @@ if st.button("🚀 Rodar Backtest"):
                     df['data_limpa'] = df['data'].dt.floor('min')
                     df = df.set_index('data_limpa').sort_index()
                     df['data_sozinha'] = df.index.normalize()
+                    # Aplicar filtro de data, se definido
+if data_inicio:
+    df = df[df['data'] >= pd.Timestamp(data_inicio)]
+if data_fim:
+    df = df[df['data'] <= pd.Timestamp(data_fim)]
+
+# Verifica se ainda há dados
+if df.empty:
+    st.warning(f"⚠️ Nenhum dado encontrado entre {data_inicio} e {data_fim}")
+    continue
 
                     ticker_nome = file.name.split(".")[0]
                     tipo_arquivo = identificar_tipo(ticker_nome)
