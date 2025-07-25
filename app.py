@@ -4,6 +4,7 @@
 
 import streamlit as st
 import pandas as pd
+import openpyxl  # Força o engine do Excel
 from datetime import time as time_obj
 from datetime import timedelta
 import numpy as np
