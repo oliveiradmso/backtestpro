@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 from datetime import datetime, time as time_obj, timedelta
-import os
 
 # Função para identificar o tipo de ativo
 def identificar_tipo(ticker):
@@ -146,11 +145,15 @@ if data_min_global and data_max_global:
                             if df_pregao.empty:
                                 continue
 
-                            # Horário de entrada
-                            idx_entrada = df_pregao.index[df_pregao.index.time == hora_inicio]
-                            if len(idx_entrada) == 0:
-                                continue
-                            idx_entrada = idx_entrada[0]
+                            # ✅ Horário de entrada: encontrar o candle mais próximo
+                            def time_to_minutes(t):
+                                return t.hour * 60 + t.minute
+
+                            minutos_desejado = time_to_minutes(hora_inicio)
+                            minutos_candles = [time_to_minutes(t) for t in df_pregao.index.time]
+                            diferencas = [abs(m - minutos_desejado) for m in minutos_candles]
+                            melhor_idx = np.argmin(diferencas)
+                            idx_entrada = df_pregao.index[melhor_idx]
                             preco_entrada = df_pregao.loc[idx_entrada]["open"]
 
                             # Saída no N-ésimo candle
