@@ -66,6 +66,12 @@ if data_min_global and data_max_global:
     data_inicio = st.date_input("Data inicial", value=data_min_global, min_value=data_min_global, max_value=data_max_global)
     data_fim = st.date_input("Data final", value=data_max_global, min_value=data_min_global, max_value=data_max_global)
 
+    # ✅ Correção: garantir que são objetos date
+    if isinstance(data_inicio, datetime):
+        data_inicio = data_inicio.date()
+    if isinstance(data_fim, datetime):
+        data_fim = data_fim.date()
+
     if data_inicio > data_fim:
         st.error("❌ A data inicial não pode ser maior que a final.")
         st.stop()
@@ -106,9 +112,9 @@ if data_min_global and data_max_global:
                         df = df.dropna(subset=['data'])
                         df['data_limpa'] = df['data'].dt.floor('min')
                         df = df.set_index('data_limpa').sort_index()
-                        df['data_sozinha'] = df.index.normalize()
+                        df['data_sozinha'] = df.index.date  # usar .date diretamente
 
-                        # Aplicar filtro de data
+                        # ✅ Aplicar filtro de data
                         df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
                         if df.empty:
                             continue
@@ -120,7 +126,7 @@ if data_min_global and data_max_global:
                         if tipo_arquivo != tipo_ativo:
                             continue  # Pula arquivos que não são do tipo escolhido
 
-                        dias_unicos = df['data_sozinha'].unique()
+                        dias_unicos = pd.unique(df['data_sozinha'])
                         dfs_compra = []
                         dfs_venda = []
 
@@ -159,7 +165,7 @@ if data_min_global and data_max_global:
                                     fechamento_anterior = 0
                                 else:
                                     dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                                    fechamento_anterior = df[df.index.normalize() == dia_anterior]["close"].iloc[-1]
+                                    fechamento_anterior = df[df.index.date == dia_anterior]["close"].iloc[-1]
                             except:
                                 fechamento_anterior = 0
 
@@ -272,8 +278,10 @@ if data_min_global and data_max_global:
                     st.dataframe(df_res_vend, use_container_width=True)
 
                 # ✅ SALVAR OS DATAFRAMES NO SESSION STATE
-                st.session_state.df_compra_geral = df_compra_geral.copy()
-                st.session_state.df_venda_geral = df_venda_geral.copy()
+                if not df_compra_geral.empty:
+                    st.session_state.df_compra_geral = df_compra_geral.copy()
+                if not df_venda_geral.empty:
+                    st.session_state.df_venda_geral = df_venda_geral.copy()
 
             else:
                 st.warning("Nenhum arquivo carregado.")
@@ -283,13 +291,13 @@ if data_min_global and data_max_global:
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
         encontrado = False
-        if "df_compra_geral" in st.session_state and "df_venda_geral" in st.session_state:
-            df_compra_geral = st.session_state.df_compra_geral
-            df_venda_geral = st.session_state.df_venda_geral
+        if "df_compra_geral" in st.session_state or "df_venda_geral" in st.session_state:
+            df_compra_geral = st.session_state.get("df_compra_geral", pd.DataFrame())
+            df_venda_geral = st.session_state.get("df_venda_geral", pd.DataFrame())
 
             # Filtrar por ação
-            mask_compra = df_compra_geral['Ação'].str.contains(nome_acao, case=False, na=False)
-            mask_venda = df_venda_geral['Ação'].str.contains(nome_acao, case=False, na=False)
+            mask_compra = df_compra_geral['Ação'].str.contains(nome_acao, case=False, na=False) if 'Ação' in df_compra_geral.columns else pd.Series(False, index=df_compra_geral.index)
+            mask_venda = df_venda_geral['Ação'].str.contains(nome_acao, case=False, na=False) if 'Ação' in df_venda_geral.columns else pd.Series(False, index=df_venda_geral.index)
 
             df_compra_acao = df_compra_geral[mask_compra]
             df_venda_acao = df_venda_geral[mask_venda]
