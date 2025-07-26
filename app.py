@@ -126,82 +126,91 @@ if "dfs_processados" in st.session_state:
 
     # 5. Botão para rodar
     if st.button("🚀 Rodar Backtest"):
-        resultados_compras = []
-        resultados_vendas = []
+        with st.spinner("Processando backtest..."):
+            resultados_compras = []
+            resultados_vendas = []
 
-        for item in dfs_processados:
-            df = item['df'].copy()
-            ticker_nome = item['ticker']
+            for item in dfs_processados:
+                df = item['df'].copy()
+                ticker_nome = item['ticker']
 
-            # Identificar tipo do ativo
-            tipo_arquivo = identificar_tipo(ticker_nome)
+                # Identificar tipo do ativo
+                tipo_arquivo = identificar_tipo(ticker_nome)
 
-            # Filtrar pelo tipo selecionado
-            if tipo_ativo == "acoes" and tipo_arquivo != "acoes":
-                continue
-            elif tipo_ativo == "mini_indice" and tipo_arquivo != "mini_indice":
-                continue
-            elif tipo_ativo == "mini_dolar" and tipo_arquivo != "mini_dolar":
-                continue
-
-            # Aplicar filtro de data
-            df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
-            if df.empty:
-                continue
-
-            # Calcular preço de entrada
-            df['hora'] = df.index.time
-            mask_horario = df['hora'].between(hora_inicio, hora_fim_pregao)
-            dias_uteis = pd.unique(df[mask_horario]['data_sozinha'])
-
-            for dia in dias_uteis:
-                df_dia = df[df['data_sozinha'] == dia]
-                if df_dia.empty or len(df_dia) <= candles_pos_entrada:
+                # Filtrar pelo tipo selecionado
+                if tipo_ativo == "acoes" and tipo_arquivo != "acoes":
+                    continue
+                elif tipo_ativo == "mini_indice" and tipo_arquivo != "mini_indice":
+                    continue
+                elif tipo_ativo == "mini_dolar" and tipo_arquivo != "mini_dolar":
                     continue
 
-                entrada = df_dia.iloc[0]['open']
-                fechamento = df_dia.iloc[-1]['close']
-                dist_percent = ((entrada - fechamento) / fechamento) * 100
+                # Aplicar filtro de data
+                df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
+                if df.empty:
+                    continue
 
-                # Sinal
-                if dist_percent <= -dist_venda:
-                    sinal = 'VENDA'
-                elif dist_percent >= dist_compra:
-                    sinal = 'COMPRA'
-                else:
-                    sinal = 'SEM SINAL'
+                # Calcular preço de entrada
+                df['hora'] = df.index.time
+                mask_horario = df['hora'].between(hora_inicio, hora_fim_pregao)
+                dias_uteis = pd.unique(df[mask_horario]['data_sozinha'])
 
-                # Saída
-                saida_row = df_dia.iloc[candles_pos_entrada]
-                preco_saida = saida_row['close']
+                for dia in dias_uteis:
+                    df_dia = df[df['data_sozinha'] == dia]
+                    if df_dia.empty or len(df_dia) <= candles_pos_entrada:
+                        continue
 
-                # Lucro em R$
-                if sinal == 'COMPRA':
-                    lucro_pontos = (preco_saida - entrada)
-                    lucro_reais = (lucro_pontos / valor_ponto) * qtd
-                elif sinal == 'VENDA':
-                    lucro_pontos = (entrada - preco_saida)
-                    lucro_reais = (lucro_pontos / valor_ponto) * qtd
-                else:
-                    lucro_reais = 0
+                    entrada = df_dia.iloc[0]['open']
+                    fechamento = df_dia.iloc[-1]['close']
+                    dist_percent = ((entrada - fechamento) / fechamento) * 100
 
-                # Retorno %
-                retorno_percent = (lucro_pontos / entrada) * 100 if entrada != 0 else 0
+                    # Sinal
+                    if dist_percent <= -dist_venda:
+                        sinal = 'VENDA'
+                    elif dist_percent >= dist_compra:
+                        sinal = 'COMPRA'
+                    else:
+                        sinal = 'SEM SINAL'
 
-                # Armazenar
-                resultado = {
-                    'Ação': ticker_nome,
-                    'Total Eventos': 1,
-                    'Lucro (R$)': lucro_reais,
-                    'Retorno (%)': retorno_percent
-                }
+                    # Saída
+                    saida_row = df_dia.iloc[candles_pos_entrada]
+                    preco_saida = saida_row['close']
 
-                if sinal == 'COMPRA':
-                    resultados_compras.append(resultado)
-                elif sinal == 'VENDA':
-                    resultados_vendas.append(resultado)
+                    # Lucro em R$
+                    if sinal == 'COMPRA':
+                        lucro_pontos = (preco_saida - entrada)
+                        lucro_reais = (lucro_pontos / valor_ponto) * qtd
+                    elif sinal == 'VENDA':
+                        lucro_pontos = (entrada - preco_saida)
+                        lucro_reais = (lucro_pontos / valor_ponto) * qtd
+                    else:
+                        lucro_reais = 0
 
-        # Exibir resumos
+                    # Retorno %
+                    retorno_percent = (lucro_pontos / entrada) * 100 if entrada != 0 else 0
+
+                    # Armazenar
+                    resultado = {
+                        'Ação': ticker_nome,
+                        'Total Eventos': 1,
+                        'Lucro (R$)': lucro_reais,
+                        'Retorno (%)': retorno_percent
+                    }
+
+                    if sinal == 'COMPRA':
+                        resultados_compras.append(resultado)
+                    elif sinal == 'VENDA':
+                        resultados_vendas.append(resultado)
+
+            # Salvar resultados no session_state
+            st.session_state.resultados_compras = resultados_compras
+            st.session_state.resultados_vendas = resultados_vendas
+
+    # Exibir resumos (mesmo após rerun)
+    if "resultados_compras" in st.session_state:
+        resultados_compras = st.session_state.resultados_compras
+        resultados_vendas = st.session_state.resultados_vendas
+
         if resultados_compras:
             st.subheader("🟢 Resumo de Compras - Mercado Caiu")
             df_compras = pd.DataFrame(resultados_compras)
@@ -266,7 +275,7 @@ if "dfs_processados" in st.session_state:
             ticker_nome = item['ticker'].upper()
             nome_acao_upper = nome_acao.upper()
 
-            # Verificar se o nome da ação está no ticker
+            # Verificar se o nome da ação está no ticker (flexível)
             if nome_acao_upper in ticker_nome or ticker_nome.replace('5-MIN_', '').replace('_', '') == nome_acao_upper:
                 df = item['df'].copy()
                 df['hora'] = df.index.time
