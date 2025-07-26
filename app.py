@@ -83,6 +83,8 @@ if data_min_global and data_max_global:
     # Botão para rodar
     if st.button("🚀 Rodar Backtest"):
         with st.spinner("Processando..."):
+
+            # ✅ ZERAR LISTAS E DATAFRAMES
             resultados_compra = []
             resultados_venda = []
             df_compra_geral = pd.DataFrame()
@@ -116,9 +118,9 @@ if data_min_global and data_max_global:
 
                         # Filtrar por tipo selecionado
                         if tipo_arquivo != tipo_ativo:
-                            continue
+                            continue  # Pula arquivos que não são do tipo escolhido
 
-                        dias_unicos = pd.unique(df['data_sozinha'])
+                        dias_unicos = df['data_sozinha'].unique()
                         dfs_compra = []
                         dfs_venda = []
 
@@ -144,7 +146,9 @@ if data_min_global and data_max_global:
 
                             # Saída no N-ésimo candle
                             idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
-                            if idx_saida not in df.index or idx_saida.date() != idx_entrada.date():
+                            if idx_saida not in df.index:
+                                continue
+                            if idx_saida.date() != idx_entrada.date():
                                 continue
                             preco_saida = df.loc[idx_saida]["open"]
 
