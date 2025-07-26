@@ -1,3 +1,104 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from datetime import datetime, time as time_obj, timedelta
+
+# Função para identificar o tipo de ativo
+def identificar_tipo(ticker):
+    ticker = ticker.upper()
+    
+    # Remover prefixos comuns
+    for prefix in ['5-MIN_', 'MINI_', 'WIN', 'WDO', 'DOL', 'IND', 'DOLZ', 'WINZ']:
+        ticker = ticker.replace(prefix, '')
+    
+    # Lista de tickers de ações
+    acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
+    
+    for acao in acoes:
+        if acao in ticker:
+            return 'acoes'
+    
+    if 'WIN' in ticker or 'WDO' in ticker or 'IND' in ticker:
+        return 'mini_indice'
+    
+    if 'DOL' in ticker or 'USD' in ticker:
+        return 'mini_dolar'
+    
+    return 'mini_dolar'
+
+# Interface do app
+st.title("📊 BacktestPro")
+st.subheader("Análise de distorção de abertura")
+
+# Verifica a senha
+senha = st.text_input("Digite a senha", type="password")
+if senha != "seuacesso123":
+    st.warning("🔐 Acesso restrito. Digite a senha correta.")
+    st.stop()
+
+st.success("✅ Acesso liberado! Bem-vindo ao BacktestPro.")
+
+# 1. Upload
+st.header("📤 Faça upload do seu arquivo Excel")
+uploaded_files = st.file_uploader("Escolha um ou mais arquivos .xlsx", type=["xlsx"], accept_multiple_files=True)
+
+# Variáveis para armazenar o período
+data_min_global = None
+data_max_global = None
+
+if uploaded_files:
+    st.info(f"✅ {len(uploaded_files)} arquivo(s) carregado(s). Processando...")
+
+    # Pré-processar para obter o período disponível
+    for file in uploaded_files:
+        try:
+            df = pd.read_excel(file)
+            df['data'] = pd.to_datetime(df['Data'], dayfirst=True, errors='coerce')
+            df = df.dropna(subset=['data'])
+            df['data_sozinha'] = df['data'].dt.date
+
+            min_data = df['data_sozinha'].min()
+            max_data = df['data_sozinha'].max()
+
+            if data_min_global is None or min_data < data_min_global:
+                data_min_global = min_data
+            if data_max_global is None or max_data > data_max_global:
+                data_max_global = max_data
+
+        except Exception as e:
+            st.warning(f"⚠️ Erro ao ler {file.name}: {e}")
+
+# Mostrar período disponível
+if data_min_global and data_max_global:
+    st.subheader("📅 Período disponível para análise")
+    st.write(f"**Data inicial mais antiga:** {data_min_global.strftime('%d/%m/%Y')}")
+    st.write(f"**Data final mais recente:** {data_max_global.strftime('%d/%m/%Y')}")
+
+    # Filtro de período
+    st.subheader("🔍 Filtro de período")
+    data_inicio = st.date_input("Data inicial", value=data_min_global, min_value=data_min_global, max_value=data_max_global)
+    data_fim = st.date_input("Data final", value=data_max_global, min_value=data_min_global, max_value=data_max_global)
+
+    # ✅ Correção: garantir que são objetos date
+    if isinstance(data_inicio, datetime):
+        data_inicio = data_inicio.date()
+    if isinstance(data_fim, datetime):
+        data_fim = data_fim.date()
+
+    if data_inicio > data_fim:
+        st.error("❌ A data inicial não pode ser maior que a final.")
+        st.stop()
+
+    # Configurações
+    st.header("⚙️ Configure o Backtest")
+    tipo_ativo = st.selectbox("Selecione o tipo de ativo", ["acoes", "mini_indice", "mini_dolar"])
+    qtd = st.number_input("Quantidade", min_value=1, value=1)
+    candles_pos_entrada = st.number_input("Número de Candles após entrada", min_value=1, value=3)
+    dist_compra = st.number_input("Distorção mínima COMPRA (%)", value=0.3)
+    dist_venda = st.number_input("Distorção mínima VENDA (%)", value=0.3)
+    hora_inicio = st.time_input("Horário de entrada", value=time_obj(10, 0))
+    hora_fim_pregao = st.time_input("Fechamento do pregão", value=time_obj(17, 30))
+
     # Botão para rodar
     if st.button("🚀 Rodar Backtest"):
         with st.expander("ℹ️ Ver detalhes do processamento", expanded=False):
@@ -215,3 +316,35 @@
 
             if df_compra_geral.empty and df_venda_geral.empty:
                 st.error("❌ Nenhuma operação foi registrada. Verifique os filtros e os dados.")
+
+    # 6. Detalhamento por ação
+    st.header("🔍 Detalhamento por Ação")
+    nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
+    if st.button("📥 Mostrar detalhamento") and nome_acao:
+        if "df_compra_geral" in st.session_state or "df_venda_geral" in st.session_state:
+            df_compra_geral = st.session_state.get("df_compra_geral", pd.DataFrame())
+            df_venda_geral = st.session_state.get("df_venda_geral", pd.DataFrame())
+
+            # Filtrar por ação
+            mask_compra = df_compra_geral['Ação'].str.contains(nome_acao, case=False, na=False) if 'Ação' in df_compra_geral.columns else pd.Series(False, index=df_compra_geral.index)
+            mask_venda = df_venda_geral['Ação'].str.contains(nome_acao, case=False, na=False) if 'Ação' in df_venda_geral.columns else pd.Series(False, index=df_venda_geral.index)
+
+            df_compra_acao = df_compra_geral[mask_compra]
+            df_venda_acao = df_venda_geral[mask_venda]
+
+            if not df_compra_acao.empty:
+                st.subheader(f"🛒 Compras em {nome_acao}:")
+                st.dataframe(df_compra_acao, use_container_width=True)
+            else:
+                st.info(f"ℹ️ Nenhuma operação de compra encontrada para {nome_acao}.")
+
+            if not df_venda_acao.empty:
+                st.subheader(f"🛒 Vendas em {nome_acao}:")
+                st.dataframe(df_venda_acao, use_container_width=True)
+            else:
+                st.info(f"ℹ️ Nenhuma operação de venda encontrada para {nome_acao}.")
+        else:
+            st.warning("⚠️ Nenhum backtest foi rodado ainda.")
+
+else:
+    st.info("ℹ️ Aguardando upload de arquivos Excel.")
