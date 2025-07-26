@@ -178,7 +178,7 @@ if uploaded_files:
                 df_compras = pd.DataFrame(resultados_compras)
                 resumo_compras = df_compras.groupby('Ação').agg({
                     'Total Eventos': 'sum',
-                    'Lucro (R$)': lambda x: x.sum()
+                    'Lucro (R$)': 'sum'
                 }).reset_index()
 
                 # Acertos
@@ -195,7 +195,6 @@ if uploaded_files:
 
                 # Lucro total
                 resumo_compras['Lucro Total (R$)'] = resumo_compras['Lucro (R$)'].round(2).apply(lambda x: f'R$ {x:.2f}')
-                resumo_compras['Lucro (R$)'] = resumo_compras['Lucro Total (R$)']  # para não quebrar
 
                 # Reordenar colunas
                 resumo_compras = resumo_compras[[
@@ -211,7 +210,7 @@ if uploaded_files:
                 df_vendas = pd.DataFrame(resultados_vendas)
                 resumo_vendas = df_vendas.groupby('Ação').agg({
                     'Total Eventos': 'sum',
-                    'Lucro (R$)': lambda x: x.sum()
+                    'Lucro (R$)': 'sum'
                 }).reset_index()
 
                 acertos_vendas = df_vendas[df_vendas['Lucro (R$)'] > 0].groupby('Ação').size().reset_index(name='Acertos')
@@ -241,6 +240,11 @@ if uploaded_files:
         for item in dfs_processados:
             if nome_acao.upper() in item['ticker'].upper():
                 df = item['df'].copy()
+
+                # ✅ CRIAR A COLUNA 'hora' ANTES DE USAR
+                df['hora'] = df['data'].dt.time
+
+                # Aplicar filtro de horário
                 df = df[df['hora'].between(hora_inicio, hora_fim_pregao)]
                 dias_uteis = df['data_sozinha'].unique()
 
