@@ -31,9 +31,10 @@ uploaded_files = st.file_uploader("Escolha um ou mais arquivos .xlsx", type=["xl
 
 # Limpar session_state se novos arquivos forem enviados
 if uploaded_files:
-    if "arquivos_carregados" not in st.session_state or st.session_state.arquivos_carregados != [f.name for f in uploaded_files]:
+    arquivos_nomes = [f.name for f in uploaded_files]
+    if "arquivos_carregados" not in st.session_state or st.session_state.arquivos_carregados != arquivos_nomes:
         st.session_state.clear()
-        st.session_state.arquivos_carregados = [f.name for f in uploaded_files]
+        st.session_state.arquivos_carregados = arquivos_nomes
 
 # Processar dados se ainda não estiverem no session_state
 if uploaded_files and "dfs_processados" not in st.session_state:
@@ -55,7 +56,11 @@ if uploaded_files and "dfs_processados" not in st.session_state:
             # Converter data
             df['data'] = pd.to_datetime(df['data'], dayfirst=True, errors='coerce')
             df = df.dropna(subset=['data'])
-            df['data_sozinha'] = df['data'].dt.date
+
+            # Definir índice com data/hora
+            df['data_limpa'] = df['data'].dt.floor('min')
+            df = df.set_index('data_limpa').sort_index()
+            df['data_sozinha'] = df.index.date  # só a data
 
             # Atualizar min e max
             min_data = df['data_sozinha'].min()
@@ -131,7 +136,7 @@ if "dfs_processados" in st.session_state:
             # Identificar tipo do ativo
             tipo_arquivo = identificar_tipo(ticker_nome)
 
-            # ✅ Filtrar pelo tipo selecionado
+            # Filtrar pelo tipo selecionado
             if tipo_ativo == "acoes" and tipo_arquivo != "acoes":
                 continue
             elif tipo_ativo == "mini_indice" and tipo_arquivo != "mini_indice":
@@ -145,7 +150,7 @@ if "dfs_processados" in st.session_state:
                 continue
 
             # Calcular preço de entrada
-            df['hora'] = df['data'].dt.time
+            df['hora'] = df.index.time
             mask_horario = df['hora'].between(hora_inicio, hora_fim_pregao)
             dias_uteis = df[mask_horario]['data_sozinha'].unique()
 
@@ -255,23 +260,27 @@ if "dfs_processados" in st.session_state:
         detalhes = []
 
         for item in dfs_processados:
-            if nome_acao.upper() in item['ticker'].upper():
+            ticker_nome = item['ticker'].upper()
+            nome_acao_upper = nome_acao.upper()
+
+            # Verificar se o nome da ação está no ticker (flexível)
+            if nome_acao_upper in ticker_nome or ticker_nome.replace('5-MIN_', '').replace('_', '') == nome_acao_upper:
                 df = item['df'].copy()
-                df['hora'] = df['data'].dt.time
+                df['hora'] = df.index.time
                 df = df[df['hora'].between(hora_inicio, hora_fim_pregao)]
-                dias_uteis = df['data_sozinha'].unique()
+                dias_uteis = df.index.date.unique()
 
                 for dia in dias_uteis:
-                    df_dia = df[df['data_sozinha'] == dia]
+                    df_dia = df[df.index.date == dia]
                     if df_dia.empty or len(df_dia) <= candles_pos_entrada:
                         continue
 
                     entrada_row = df_dia.iloc[0]
-                    entrada_dt = pd.Timestamp(entrada_row.name)  # Garantido como Timestamp
+                    entrada_dt = entrada_row.name  # Timestamp com data e hora
                     preco_entrada = entrada_row['open']
 
                     saida_row = df_dia.iloc[candles_pos_entrada]
-                    saida_dt = pd.Timestamp(saida_row.name)
+                    saida_dt = saida_row.name  # Timestamp com data e hora
                     preco_saida = saida_row['close']
 
                     dist_percent = ((preco_entrada - saida_row['close']) / saida_row['close']) * 100
@@ -296,15 +305,16 @@ if "dfs_processados" in st.session_state:
                         'Retorno (%)': f"{retorno_percent:.2f}%"
                     })
 
-                if detalhes:
-                    df_detalhe = pd.DataFrame(detalhes)
-                    st.table(df_detalhe)
-                else:
-                    st.info("ℹ️ Nenhuma operação encontrada.")
                 encontrado = True
                 break
 
-        if not encontrado:
+        if detalhes:
+            df_detalhe = pd.DataFrame(detalhes)
+            st.table(df_detalhe)
+        elif not encontrado:
             st.warning("⚠️ Ação não encontrada nos arquivos carregados.")
+        else:
+            st.info("ℹ️ Nenhuma operação encontrada para esta ação com os filtros atuais.")
+
 else:
     st.info("ℹ️ Aguardando upload de arquivos Excel.")
