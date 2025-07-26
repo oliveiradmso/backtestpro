@@ -152,7 +152,7 @@ if "dfs_processados" in st.session_state:
             # Calcular preço de entrada
             df['hora'] = df.index.time
             mask_horario = df['hora'].between(hora_inicio, hora_fim_pregao)
-            dias_uteis = pd.unique(df[mask_horario]['data_sozinha'])  # ✅ pd.unique()
+            dias_uteis = pd.unique(df[mask_horario]['data_sozinha'])
 
             for dia in dias_uteis:
                 df_dia = df[df['data_sozinha'] == dia]
@@ -204,7 +204,6 @@ if "dfs_processados" in st.session_state:
         # Exibir resumos
         if resultados_compras:
             st.subheader("🟢 Resumo de Compras - Mercado Caiu")
-
             df_compras = pd.DataFrame(resultados_compras)
             resumo_compras = df_compras.groupby('Ação').agg({
                 'Total Eventos': 'sum',
@@ -214,8 +213,8 @@ if "dfs_processados" in st.session_state:
             acertos_compras = df_compras[df_compras['Lucro (R$)'] > 0].groupby('Ação').size().reset_index(name='Acertos')
             resumo_compras = resumo_compras.merge(acertos_compras, on='Ação', how='left').fillna(0)
             resumo_compras['Acertos'] = resumo_compras['Acertos'].astype(int)
-
             resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total Eventos'] * 100).round(2).astype(str) + '%'
+
             retorno_medio = df_compras.groupby('Ação')['Lucro (R$)'].mean().round(2)
             resumo_compras['Retorno Médio (R$)'] = resumo_compras['Ação'].map(retorno_medio).apply(lambda x: f'R$ {x:.2f}')
             resumo_compras['Lucro Total (R$)'] = resumo_compras['Lucro (R$)'].round(2).apply(lambda x: f'R$ {x:.2f}')
@@ -226,10 +225,11 @@ if "dfs_processados" in st.session_state:
             ]]
 
             st.table(resumo_compras)
+        else:
+            st.info("ℹ️ Nenhuma operação de compra foi registrada.")
 
         if resultados_vendas:
             st.subheader("🔴 Resumo de Vendas - Mercado Subiu")
-
             df_vendas = pd.DataFrame(resultados_vendas)
             resumo_vendas = df_vendas.groupby('Ação').agg({
                 'Total Eventos': 'sum',
@@ -239,8 +239,8 @@ if "dfs_processados" in st.session_state:
             acertos_vendas = df_vendas[df_vendas['Lucro (R$)'] > 0].groupby('Ação').size().reset_index(name='Acertos')
             resumo_vendas = resumo_vendas.merge(acertos_vendas, on='Ação', how='left').fillna(0)
             resumo_vendas['Acertos'] = resumo_vendas['Acertos'].astype(int)
-
             resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total Eventos'] * 100).round(2).astype(str) + '%'
+
             retorno_medio_v = df_vendas.groupby('Ação')['Lucro (R$)'].mean().round(2)
             resumo_vendas['Retorno Médio (R$)'] = resumo_vendas['Ação'].map(retorno_medio_v).apply(lambda x: f'R$ {x:.2f}')
             resumo_vendas['Lucro Total (R$)'] = resumo_vendas['Lucro (R$)'].round(2).apply(lambda x: f'R$ {x:.2f}')
@@ -251,24 +251,27 @@ if "dfs_processados" in st.session_state:
             ]]
 
             st.table(resumo_vendas)
+        else:
+            st.info("ℹ️ Nenhuma operação de venda foi registrada.")
 
     # 6. Detalhamento por ação
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
         encontrado = False
-        detalhes = []
+        detalhes_compras = []
+        detalhes_vendas = []
 
         for item in dfs_processados:
             ticker_nome = item['ticker'].upper()
             nome_acao_upper = nome_acao.upper()
 
-            # Verificar se o nome da ação está no ticker (flexível)
+            # Verificar se o nome da ação está no ticker
             if nome_acao_upper in ticker_nome or ticker_nome.replace('5-MIN_', '').replace('_', '') == nome_acao_upper:
                 df = item['df'].copy()
                 df['hora'] = df.index.time
                 df = df[df['hora'].between(hora_inicio, hora_fim_pregao)]
-                dias_uteis = pd.unique(df['data_sozinha'])  # ✅ pd.unique()
+                dias_uteis = pd.unique(df['data_sozinha'])
 
                 for dia in dias_uteis:
                     df_dia = df[df['data_sozinha'] == dia]
@@ -283,8 +286,10 @@ if "dfs_processados" in st.session_state:
                     saida_dt = saida_row.name  # Timestamp com data e hora
                     preco_saida = saida_row['close']
 
-                    dist_percent = ((preco_entrada - saida_row['close']) / saida_row['close']) * 100
+                    fechamento_anterior = df_dia.iloc[-1]['close']
+                    dist_percent = ((preco_entrada - fechamento_anterior) / fechamento_anterior) * 100
 
+                    # Sinal
                     if dist_percent <= -dist_venda:
                         sinal = 'VENDA'
                     elif dist_percent >= dist_compra:
@@ -292,29 +297,43 @@ if "dfs_processados" in st.session_state:
                     else:
                         continue
 
+                    # Lucro e retorno
                     lucro_pontos = (preco_saida - preco_entrada) if sinal == 'COMPRA' else (preco_entrada - preco_saida)
                     lucro_reais = (lucro_pontos / valor_ponto) * qtd
                     retorno_percent = (lucro_pontos / preco_entrada) * 100 if preco_entrada != 0 else 0
 
-                    detalhes.append({
+                    detalhe = {
                         'Data Entrada': entrada_dt.strftime('%d/%m/%Y %H:%M'),
                         'Data Saída': saida_dt.strftime('%d/%m/%Y %H:%M'),
                         'Preço Entrada': f"{preco_entrada:.2f}",
                         'Preço Saída': f"{preco_saida:.2f}",
                         'Lucro (R$)': f"{lucro_reais:.2f}",
                         'Retorno (%)': f"{retorno_percent:.2f}%"
-                    })
+                    }
+
+                    if sinal == 'COMPRA':
+                        detalhes_compras.append(detalhe)
+                    elif sinal == 'VENDA':
+                        detalhes_vendas.append(detalhe)
 
                 encontrado = True
                 break
 
-        if detalhes:
-            df_detalhe = pd.DataFrame(detalhes)
-            st.table(df_detalhe)
+        if detalhes_compras:
+            st.subheader(f"🛒 Compras em {nome_acao}:")
+            df_compras = pd.DataFrame(detalhes_compras)
+            st.table(df_compras)
+        else:
+            st.info(f"ℹ️ Nenhuma operação de compra encontrada para {nome_acao}.")
+
+        if detalhes_vendas:
+            st.subheader(f"🛒 Vendas em {nome_acao}:")
+            df_vendas = pd.DataFrame(detalhes_vendas)
+            st.table(df_vendas)
+        elif encontrado:
+            st.info(f"ℹ️ Nenhuma operação de venda encontrada para {nome_acao}.")
         elif not encontrado:
             st.warning("⚠️ Ação não encontrada nos arquivos carregados.")
-        else:
-            st.info("ℹ️ Nenhuma operação encontrada para esta ação com os filtros atuais.")
 
 else:
     st.info("ℹ️ Aguardando upload de arquivos Excel.")
