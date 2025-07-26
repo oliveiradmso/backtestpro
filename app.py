@@ -6,12 +6,25 @@ from datetime import datetime, time as time_obj, timedelta
 # Função para identificar o tipo de ativo
 def identificar_tipo(ticker):
     ticker = ticker.upper()
-    if ticker.startswith('WIN') or ticker.startswith('WDO'):
+    
+    # Remover prefixos comuns
+    for prefix in ['5-MIN_', 'MINI_', 'WIN', 'WDO', 'DOL', 'IND', 'DOLZ', 'WINZ']:
+        ticker = ticker.replace(prefix, '')
+    
+    # Lista de tickers de ações
+    acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
+    
+    for acao in acoes:
+        if acao in ticker:
+            return 'acoes'
+    
+    if 'WIN' in ticker or 'WDO' in ticker or 'IND' in ticker:
         return 'mini_indice'
-    elif ticker.startswith('PETR') or ticker.startswith('VALE') or ticker.startswith('ITUB') or ticker.startswith('BBDC'):
-        return 'acoes'
-    else:
+    
+    if 'DOL' in ticker or 'USD' in ticker:
         return 'mini_dolar'
+    
+    return 'mini_dolar'
 
 # Interface do app
 st.title("📊 BacktestPro")
@@ -126,6 +139,7 @@ if data_min_global and data_max_global:
 
                     ticker_nome = file.name.split(".")[0]
                     tipo_arquivo = identificar_tipo(ticker_nome)
+                    st.write(f"🏷️ {ticker_nome} → tipo identificado: {tipo_arquivo}")
 
                     # Filtrar por tipo selecionado
                     if tipo_arquivo != tipo_ativo:
