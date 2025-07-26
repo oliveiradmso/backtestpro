@@ -152,7 +152,7 @@ if "dfs_processados" in st.session_state:
             # Calcular preço de entrada
             df['hora'] = df.index.time
             mask_horario = df['hora'].between(hora_inicio, hora_fim_pregao)
-            dias_uteis = df[mask_horario]['data_sozinha'].unique()
+            dias_uteis = pd.unique(df[mask_horario]['data_sozinha'])  # ✅ CORRIGIDO: pd.unique()
 
             for dia in dias_uteis:
                 df_dia = df[df['data_sozinha'] == dia]
@@ -268,10 +268,10 @@ if "dfs_processados" in st.session_state:
                 df = item['df'].copy()
                 df['hora'] = df.index.time
                 df = df[df['hora'].between(hora_inicio, hora_fim_pregao)]
-                dias_uteis = df.index.date.unique()
+                dias_uteis = pd.unique(df['data_sozinha'])  # ✅ CORRIGIDO: pd.unique()
 
                 for dia in dias_uteis:
-                    df_dia = df[df.index.date == dia]
+                    df_dia = df[df['data_sozinha'] == dia]
                     if df_dia.empty or len(df_dia) <= candles_pos_entrada:
                         continue
 
