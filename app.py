@@ -29,7 +29,7 @@ st.success("✅ Acesso liberado! Bem-vindo ao BacktestPro.")
 st.header("📤 Faça upload do seu arquivo Excel")
 uploaded_files = st.file_uploader("Escolha um ou mais arquivos .xlsx", type=["xlsx"], accept_multiple_files=True)
 
-# Variável para armazenar o período global
+# Variáveis para armazenar dados
 data_min_global = None
 data_max_global = None
 dfs_processados = []
@@ -97,9 +97,18 @@ if uploaded_files:
         hora_inicio = st.time_input("Horário de entrada", value=time_obj(9, 0))
         hora_fim_pregao = st.time_input("Fechamento do pregão", value=time_obj(17, 30))
 
+        # Ajustar valor do ponto
+        if tipo_ativo == "acoes":
+            valor_ponto = 0.01
+        elif tipo_ativo == "mini_indice":
+            valor_ponto = 0.5
+        else:
+            valor_ponto = 0.005
+
         # 6. Botão para rodar
         if st.button("🚀 Rodar Backtest"):
-            resultados_gerais = []
+            resultados_compras = []
+            resultados_vendas = []
 
             for item in dfs_processados:
                 df = item['df'].copy()
@@ -110,17 +119,6 @@ if uploaded_files:
                 if df.empty:
                     continue
 
-                # Identificar tipo do ativo
-                tipo_arquivo = identificar_tipo(ticker_nome)
-
-                # Ajustar valor do ponto
-                if tipo_ativo == "acoes":
-                    valor_ponto = 0.01
-                elif tipo_ativo == "mini_indice":
-                    valor_ponto = 0.5
-                else:
-                    valor_ponto = 0.005
-
                 # Calcular preço de entrada
                 df['hora'] = df['data'].dt.time
                 mask_horario = df['hora'].between(hora_inicio, hora_fim_pregao)
@@ -128,13 +126,14 @@ if uploaded_files:
 
                 for dia in dias_uteis:
                     df_dia = df[df['data_sozinha'] == dia]
-                    if df_dia.empty:
+                    if df_dia.empty or len(df_dia) <= candles_pos_entrada:
                         continue
 
                     entrada = df_dia.iloc[0]['open']
                     fechamento = df_dia.iloc[-1]['close']
                     dist_percent = ((entrada - fechamento) / fechamento) * 100
 
+                    # Sinal
                     if dist_percent <= -dist_venda:
                         sinal = 'VENDA'
                     elif dist_percent >= dist_compra:
@@ -142,56 +141,152 @@ if uploaded_files:
                     else:
                         sinal = 'SEM SINAL'
 
-                    resultado = 0
-                    if len(df_dia) > candles_pos_entrada:
-                        preco_saida = df_dia.iloc[candles_pos_entrada]['close']
-                        if sinal == 'COMPRA':
-                            resultado = (preco_saida - entrada) / valor_ponto * qtd
-                        elif sinal == 'VENDA':
-                            resultado = (entrada - preco_saida) / valor_ponto * qtd
+                    # Saída
+                    saida_row = df_dia.iloc[candles_pos_entrada]
+                    preco_saida = saida_row['close']
 
-                    resultados_gerais.append({
-                        'Arquivo': item['file'].name,
-                        'Data': dia.strftime('%d/%m/%Y'),
-                        'Entrada': f"{entrada:.5f}",
-                        'Fechamento Anterior': f"{fechamento:.5f}",
-                        'Distorção (%)': f"{dist_percent:.2f}",
-                        'Sinal': sinal,
-                        'Resultado (pontos)': f"{resultado:.2f}"
-                    })
+                    # Lucro em R$
+                    if sinal == 'COMPRA':
+                        lucro_pontos = (preco_saida - entrada)
+                        lucro_reais = (lucro_pontos / valor_ponto) * qtd
+                    elif sinal == 'VENDA':
+                        lucro_pontos = (entrada - preco_saida)
+                        lucro_reais = (lucro_pontos / valor_ponto) * qtd
+                    else:
+                        lucro_reais = 0
 
-            # Exibir resultados
-            if resultados_gerais:
-                df_resultados = pd.DataFrame(resultados_gerais)
-                st.subheader("📈 Resultados do Backtest")
-                st.dataframe(df_resultados)
+                    # Retorno %
+                    retorno_percent = (lucro_pontos / entrada) * 100 if entrada != 0 else 0
 
-                # Estatísticas
-                df_resultados['Resultado (pontos)'] = pd.to_numeric(df_resultados['Resultado (pontos)'], errors='coerce')
-                total_operacoes = len(df_resultados)
-                acertos = len(df_resultados[df_resultados['Resultado (pontos)'] > 0])
-                taxa_acerto = (acertos / total_operacoes * 100) if total_operacoes > 0 else 0
-                lucro_total = df_resultados['Resultado (pontos)'].sum()
+                    # Armazenar
+                    resultado = {
+                        'Ação': ticker_nome,
+                        'Total Eventos': 1,
+                        'Lucro (R$)': lucro_reais,
+                        'Retorno (%)': retorno_percent
+                    }
 
-                st.write(f"**Total de operações:** {total_operacoes}")
-                st.write(f"**Taxa de acerto:** {taxa_acerto:.1f}%")
-                st.write(f"**Lucro total (pontos):** {lucro_total:.2f}")
-            else:
-                st.info("ℹ️ Nenhum dado processado com os filtros atuais.")
+                    if sinal == 'COMPRA':
+                        resultados_compras.append(resultado)
+                    elif sinal == 'VENDA':
+                        resultados_vendas.append(resultado)
+
+            # Exibir resumos
+            if resultados_compras:
+                st.subheader("🟢 Resumo de Compras - Mercado Caiu")
+
+                df_compras = pd.DataFrame(resultados_compras)
+                resumo_compras = df_compras.groupby('Ação').agg({
+                    'Total Eventos': 'sum',
+                    'Lucro (R$)': lambda x: x.sum()
+                }).reset_index()
+
+                # Acertos
+                acertos_compras = df_compras[df_compras['Lucro (R$)'] > 0].groupby('Ação').size().reset_index(name='Acertos')
+                resumo_compras = resumo_compras.merge(acertos_compras, on='Ação', how='left').fillna(0)
+                resumo_compras['Acertos'] = resumo_compras['Acertos'].astype(int)
+
+                # Taxa de acerto
+                resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total Eventos'] * 100).round(2).astype(str) + '%'
+
+                # Retorno médio
+                retorno_medio = df_compras.groupby('Ação')['Lucro (R$)'].mean().round(2)
+                resumo_compras['Retorno Médio (R$)'] = resumo_compras['Ação'].map(retorno_medio).apply(lambda x: f'R$ {x:.2f}')
+
+                # Lucro total
+                resumo_compras['Lucro Total (R$)'] = resumo_compras['Lucro (R$)'].round(2).apply(lambda x: f'R$ {x:.2f}')
+                resumo_compras['Lucro (R$)'] = resumo_compras['Lucro Total (R$)']  # para não quebrar
+
+                # Reordenar colunas
+                resumo_compras = resumo_compras[[
+                    'Ação', 'Total Eventos', 'Acertos', 'Taxa de Acerto',
+                    'Retorno Médio (R$)', 'Lucro Total (R$)'
+                ]]
+
+                st.table(resumo_compras)
+
+            if resultados_vendas:
+                st.subheader("🔴 Resumo de Vendas - Mercado Subiu")
+
+                df_vendas = pd.DataFrame(resultados_vendas)
+                resumo_vendas = df_vendas.groupby('Ação').agg({
+                    'Total Eventos': 'sum',
+                    'Lucro (R$)': lambda x: x.sum()
+                }).reset_index()
+
+                acertos_vendas = df_vendas[df_vendas['Lucro (R$)'] > 0].groupby('Ação').size().reset_index(name='Acertos')
+                resumo_vendas = resumo_vendas.merge(acertos_vendas, on='Ação', how='left').fillna(0)
+                resumo_vendas['Acertos'] = resumo_vendas['Acertos'].astype(int)
+
+                resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total Eventos'] * 100).round(2).astype(str) + '%'
+
+                retorno_medio_v = df_vendas.groupby('Ação')['Lucro (R$)'].mean().round(2)
+                resumo_vendas['Retorno Médio (R$)'] = resumo_vendas['Ação'].map(retorno_medio_v).apply(lambda x: f'R$ {x:.2f}')
+                resumo_vendas['Lucro Total (R$)'] = resumo_vendas['Lucro (R$)'].round(2).apply(lambda x: f'R$ {x:.2f}')
+
+                resumo_vendas = resumo_vendas[[
+                    'Ação', 'Total Eventos', 'Acertos', 'Taxa de Acerto',
+                    'Retorno Médio (R$)', 'Lucro Total (R$)'
+                ]]
+
+                st.table(resumo_vendas)
 
     # 7. Detalhamento por ação
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
-        # Buscar o arquivo correspondente
         encontrado = False
+        detalhes = []
+
         for item in dfs_processados:
             if nome_acao.upper() in item['ticker'].upper():
-                df = item['df']
-                st.write(f"### Dados da ação: {nome_acao}")
-                st.dataframe(df[['data', 'open', 'high', 'low', 'close']].head(20))
+                df = item['df'].copy()
+                df = df[df['hora'].between(hora_inicio, hora_fim_pregao)]
+                dias_uteis = df['data_sozinha'].unique()
+
+                for dia in dias_uteis:
+                    df_dia = df[df['data_sozinha'] == dia]
+                    if df_dia.empty or len(df_dia) <= candles_pos_entrada:
+                        continue
+
+                    entrada_row = df_dia.iloc[0]
+                    entrada_dt = entrada_row.name
+                    preco_entrada = entrada_row['open']
+
+                    saida_row = df_dia.iloc[candles_pos_entrada]
+                    saida_dt = saida_row.name
+                    preco_saida = saida_row['close']
+
+                    dist_percent = ((preco_entrada - saida_row['close']) / saida_row['close']) * 100
+
+                    if dist_percent <= -dist_venda:
+                        sinal = 'VENDA'
+                    elif dist_percent >= dist_compra:
+                        sinal = 'COMPRA'
+                    else:
+                        continue
+
+                    lucro_pontos = (preco_saida - preco_entrada) if sinal == 'COMPRA' else (preco_entrada - preco_saida)
+                    lucro_reais = (lucro_pontos / valor_ponto) * qtd
+                    retorno_percent = (lucro_pontos / preco_entrada) * 100 if preco_entrada != 0 else 0
+
+                    detalhes.append({
+                        'Data Entrada': entrada_dt.strftime('%d/%m/%Y %H:%M'),
+                        'Data Saída': saida_dt.strftime('%d/%m/%Y %H:%M'),
+                        'Preço Entrada': f"{preco_entrada:.2f}",
+                        'Preço Saída': f"{preco_saida:.2f}",
+                        'Lucro (R$)': f"{lucro_reais:.2f}",
+                        'Retorno (%)': f"{retorno_percent:.2f}%"
+                    })
+
+                if detalhes:
+                    df_detalhe = pd.DataFrame(detalhes)
+                    st.table(df_detalhe)
+                else:
+                    st.info("ℹ️ Nenhuma operação encontrada.")
                 encontrado = True
                 break
+
         if not encontrado:
             st.warning("⚠️ Ação não encontrada nos arquivos carregados.")
 else:
