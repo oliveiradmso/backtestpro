@@ -181,6 +181,9 @@ if data_min_global and data_max_global:
                 hora_inicio = time_obj(hora, minuto)
                 st.write(f"⏰ Processando horário: {horario_str}")
 
+                dfs_compra = []
+                dfs_venda = []
+
                 for file in uploaded_files:
                     try:
                         ticker_nome = file.name.split(".")[0]
@@ -200,14 +203,9 @@ if data_min_global and data_max_global:
                         df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
 
                         if df.empty:
-                            st.write(f"🟡 {file.name}: Nenhum dado no período.")
                             continue
 
                         dias_unicos = pd.unique(df['data_sozinha'])
-                        st.write(f"📅 {ticker_nome}: {len(dias_unicos)} dias no período")
-
-                        dfs_compra = []
-                        dfs_venda = []
 
                         for i in range(len(dias_unicos)):
                             dia_atual = dias_unicos[i]
