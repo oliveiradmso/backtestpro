@@ -181,6 +181,7 @@ if data_min_global and data_max_global:
                 hora_inicio = time_obj(hora, minuto)
                 st.write(f"⏰ Processando horário: {horario_str}")
 
+                # ✅ Reiniciar listas para cada horário
                 dfs_compra = []
                 dfs_venda = []
 
@@ -298,36 +299,36 @@ if data_min_global and data_max_global:
                                 if entrada_encontrada:
                                     break
 
-                        # Acumular resultados por horário
-                        if dfs_compra:
-                            total = len(dfs_compra)
-                            acertos = len([op for op in dfs_compra if op["lucro"] > 0])
-                            lucro_total = sum(op["lucro"] for op in dfs_compra)
-                            resultados_por_horario.append({
-                                "Horário": horario_str,
-                                "Total Eventos": total,
-                                "Acertos": acertos,
-                                "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                                "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
-                                "Direção": "Compra"
-                            })
-
-                        if dfs_venda:
-                            total = len(dfs_venda)
-                            acertos = len([op for op in dfs_venda if op["lucro"] > 0])
-                            lucro_total = sum(op["lucro"] for op in dfs_venda)
-                            resultados_por_horario.append({
-                                "Horário": horario_str,
-                                "Total Eventos": total,
-                                "Acertos": acertos,
-                                "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                                "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
-                                "Direção": "Venda"
-                            })
-
                     except Exception as e:
                         st.write(f"❌ Erro ao processar {file.name}: {e}")
                         continue
+
+                # ✅ Acumular resultados por horário (fora do loop de arquivos)
+                if dfs_compra:
+                    total = len(dfs_compra)
+                    acertos = len([op for op in dfs_compra if op["lucro"] > 0])
+                    lucro_total = sum(op["lucro"] for op in dfs_compra)
+                    resultados_por_horario.append({
+                        "Horário": horario_str,
+                        "Total Eventos": total,
+                        "Acertos": acertos,
+                        "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
+                        "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
+                        "Direção": "Compra"
+                    })
+
+                if dfs_venda:
+                    total = len(dfs_venda)
+                    acertos = len([op for op in dfs_venda if op["lucro"] > 0])
+                    lucro_total = sum(op["lucro"] for op in dfs_venda)
+                    resultados_por_horario.append({
+                        "Horário": horario_str,
+                        "Total Eventos": total,
+                        "Acertos": acertos,
+                        "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
+                        "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
+                        "Direção": "Venda"
+                    })
 
             # ✅ DEBUG: Mostrar estatísticas
             st.write(f"📊 Dias analisados: {total_dias_analisados}")
