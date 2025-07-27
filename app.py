@@ -16,7 +16,7 @@ def identificar_tipo(ticker):
         if ticker.startswith(prefix):
             ticker = ticker[len(prefix):]
     
-    # Verificações seguras e prioritárias
+    # Verificações seguras
     if 'WIN' in ticker:
         return 'mini_indice'
     if 'INDICE' in ticker:
@@ -214,17 +214,18 @@ if data_min_global and data_max_global:
                                 distorcao = preco_entrada - fechamento_anterior
                                 distorcao_percentual = (distorcao / fechamento_anterior) * 100
 
-                            # Valor por ponto (R$ por ponto por contrato)
-                            if tipo_ativo == "acoes":
-                                valor_ponto = 0.01
-                            elif tipo_ativo == "mini_indice":
+                            # Valor por ponto (usado apenas para mini_indice e mini_dolar)
+                            if tipo_ativo == "mini_indice":
                                 valor_ponto = 0.20
                             elif tipo_ativo == "mini_dolar":
                                 valor_ponto = 10.00
 
                             # Compra: mercado caiu
                             if distorcao_percentual < -dist_compra:
-                                lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
+                                if tipo_ativo == "acoes":
+                                    lucro_reais = (preco_saida - preco_entrada) * qtd
+                                else:
+                                    lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
                                 lucro_formatado = round(lucro_reais, 2)
                                 retorno = (preco_saida - preco_entrada) / preco_entrada * 100
                                 dfs_compra.append({
@@ -240,7 +241,10 @@ if data_min_global and data_max_global:
 
                             # Venda: mercado subiu
                             if distorcao_percentual > dist_venda:
-                                lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
+                                if tipo_ativo == "acoes":
+                                    lucro_reais = (preco_entrada - preco_saida) * qtd
+                                else:
+                                    lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
                                 lucro_formatado = round(lucro_reais, 2)
                                 retorno = (preco_entrada - preco_saida) / preco_entrada * 100
                                 dfs_venda.append({
