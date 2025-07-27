@@ -144,6 +144,7 @@ if data_min_global and data_max_global:
 
     # Validar horários selecionados
     if horarios_selecionados:
+        # Converter horários para minutos
         def horario_para_minutos(h):
             h, m = map(int, h.split(":"))
             return h * 60 + m
@@ -170,7 +171,7 @@ if data_min_global and data_max_global:
 
             # Armazenar resultados por horário
             resultados_por_horario = []
-            todas_operacoes = []
+            todas_operacoes = []  # Para detalhamento por ação
 
             total_dias_analisados = 0
             dias_com_sinal = 0
@@ -180,8 +181,9 @@ if data_min_global and data_max_global:
                 hora_inicio = time_obj(hora, minuto)
                 st.write(f"⏰ Processando horário: {horario_str}")
 
-                # ✅ Listas limpas para CADA horário
-                operacoes_horario = []
+                # ✅ Reiniciar listas para cada horário
+                dfs_compra = []
+                dfs_venda = []
 
                 for file in uploaded_files:
                     try:
@@ -215,87 +217,97 @@ if data_min_global and data_max_global:
                             if df_pregao.empty:
                                 continue
 
-                            # Encontrar candle mais próximo do horário
-                            def time_to_minutes(t):
-                                return t.hour * 60 + t.minute
+                            # Ordenar candles do dia
+                            candles_do_dia = df_pregao.sort_index()
 
-                            minutos_desejado = time_to_minutes(hora_inicio)
-                            minutos_candles = [time_to_minutes(t) for t in df_pregao.index.time]
-                            diferencas = [abs(m - minutos_desejado) for m in minutos_candles]
-                            melhor_idx = np.argmin(diferencas)
-                            idx_entrada = df_pregao.index[melhor_idx]
-                            preco_entrada = df_pregao.loc[idx_entrada]["open"]
+                            entrada_encontrada = False
+                            total_dias_analisados += 1
 
-                            # Saída
-                            idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
-                            if idx_saida not in df.index or idx_saida.date() != idx_entrada.date():
-                                continue
-                            preco_saida = df.loc[idx_saida]["open"]
+                            for idx_entrada in candles_do_dia.index:
+                                preco_entrada = candles_do_dia.loc[idx_entrada]["open"]
 
-                            # Fechamento anterior
-                            try:
-                                idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
-                                if idx_dia_atual_idx == 0:
-                                    fechamento_anterior = 0
-                                else:
+                                # Fechamento do dia anterior
+                                try:
+                                    idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
+                                    if idx_dia_atual_idx == 0:
+                                        continue  # Pula o primeiro dia (sem dia anterior)
                                     dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
                                     fechamento_anterior = df[df.index.date == dia_anterior]["close"].iloc[-1]
-                            except:
-                                fechamento_anterior = 0
+                                except Exception as e:
+                                    continue
 
-                            distorcao_percentual = 0
-                            if fechamento_anterior != 0:
-                                distorcao = preco_entrada - fechamento_anterior
-                                distorcao_percentual = (distorcao / fechamento_anterior) * 100
+                                # Calcular distorção
+                                distorcao_percentual = 0
+                                if fechamento_anterior > 0:
+                                    distorcao = preco_entrada - fechamento_anterior
+                                    distorcao_percentual = (distorcao / fechamento_anterior) * 100
 
-                            # Valor por ponto
-                            if tipo_ativo == "mini_indice":
-                                valor_ponto = 0.20
-                            elif tipo_ativo == "mini_dolar":
-                                valor_ponto = 10.00
-                            else:
-                                valor_ponto = 1.00
+                                # Verificar distorção mínima
+                                if not entrada_encontrada:
+                                    if distorcao_percentual < -dist_compra:
+                                        idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
+                                        if idx_saida in df.index and idx_saida.date() == idx_entrada.date():
+                                            preco_saida = df.loc[idx_saida]["open"]
+                                            if tipo_ativo == "acoes":
+                                                lucro_reais = (preco_saida - preco_entrada) * qtd
+                                            else:
+                                                valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
+                                                lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
 
-                            # Compra
-                            if distorcao_percentual < -dist_compra:
-                                if tipo_ativo == "acoes":
-                                    lucro_reais = (preco_saida - preco_entrada) * qtd
-                                else:
-                                    lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
-                                operacoes_horario.append({
-                                    "tipo": "Compra",
-                                    "lucro": lucro_reais,
-                                    "distorcao": distorcao_percentual,
-                                    "ticker": ticker_nome,
-                                    "data": dia_atual
-                                })
+                                            dfs_compra.append({"lucro": lucro_reais, "distorcao": distorcao_percentual})
+                                            todas_operacoes.append({
+                                                "Ação": ticker_nome,
+                                                "Direção": "Compra",
+                                                "Horário": idx_entrada.strftime("%H:%M"),
+                                                "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                                                "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                                                "Preço Entrada": round(preco_entrada, 2),
+                                                "Preço Saída": round(preco_saida, 2),
+                                                "Lucro (R$)": round(lucro_reais, 2),
+                                                "Distorção (%)": f"{distorcao_percentual:.2f}%",
+                                                "Quantidade": qtd
+                                            })
+                                            entrada_encontrada = True
+                                            dias_com_sinal += 1
 
-                            # Venda
-                            elif distorcao_percentual > dist_venda:
-                                if tipo_ativo == "acoes":
-                                    lucro_reais = (preco_entrada - preco_saida) * qtd
-                                else:
-                                    lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
-                                operacoes_horario.append({
-                                    "tipo": "Venda",
-                                    "lucro": lucro_reais,
-                                    "distorcao": distorcao_percentual,
-                                    "ticker": ticker_nome,
-                                    "data": dia_atual
-                                })
+                                    elif distorcao_percentual > dist_venda:
+                                        idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
+                                        if idx_saida in df.index and idx_saida.date() == idx_entrada.date():
+                                            preco_saida = df.loc[idx_saida]["open"]
+                                            if tipo_ativo == "acoes":
+                                                lucro_reais = (preco_entrada - preco_saida) * qtd
+                                            else:
+                                                valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
+                                                lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
+
+                                            dfs_venda.append({"lucro": lucro_reais, "distorcao": distorcao_percentual})
+                                            todas_operacoes.append({
+                                                "Ação": ticker_nome,
+                                                "Direção": "Venda",
+                                                "Horário": idx_entrada.strftime("%H:%M"),
+                                                "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                                                "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                                                "Preço Entrada": round(preco_entrada, 2),
+                                                "Preço Saída": round(preco_saida, 2),
+                                                "Lucro (R$)": round(lucro_reais, 2),
+                                                "Distorção (%)": f"{distorcao_percentual:.2f}%",
+                                                "Quantidade": qtd
+                                            })
+                                            entrada_encontrada = True
+                                            dias_com_sinal += 1
+
+                                if entrada_encontrada:
+                                    break
 
                     except Exception as e:
                         st.write(f"❌ Erro ao processar {file.name}: {e}")
                         continue
 
-                # ✅ Calcular resultados para este horário
-                compras = [op for op in operacoes_horario if op["tipo"] == "Compra"]
-                vendas = [op for op in operacoes_horario if op["tipo"] == "Venda"]
-
-                if compras:
-                    total = len(compras)
-                    acertos = len([op for op in compras if op["lucro"] > 0])
-                    lucro_total = sum(op["lucro"] for op in compras)
+                # ✅ Acumular resultados por horário (fora do loop de arquivos, dentro do horário)
+                if dfs_compra:
+                    total = len(dfs_compra)
+                    acertos = len([op for op in dfs_compra if op["lucro"] > 0])
+                    lucro_total = sum(op["lucro"] for op in dfs_compra)
                     resultados_por_horario.append({
                         "Horário": horario_str,
                         "Total Eventos": total,
@@ -305,10 +317,10 @@ if data_min_global and data_max_global:
                         "Direção": "Compra"
                     })
 
-                if vendas:
-                    total = len(vendas)
-                    acertos = len([op for op in vendas if op["lucro"] > 0])
-                    lucro_total = sum(op["lucro"] for op in vendas)
+                if dfs_venda:
+                    total = len(dfs_venda)
+                    acertos = len([op for op in dfs_venda if op["lucro"] > 0])
+                    lucro_total = sum(op["lucro"] for op in dfs_venda)
                     resultados_por_horario.append({
                         "Horário": horario_str,
                         "Total Eventos": total,
@@ -318,13 +330,20 @@ if data_min_global and data_max_global:
                         "Direção": "Venda"
                     })
 
+            # ✅ DEBUG: Mostrar estatísticas
+            st.write(f"📊 Dias analisados: {total_dias_analisados}")
+            st.write(f"✅ Dias com sinal: {dias_com_sinal}")
+
             # ✅ SALVAR NO SESSION STATE
             if resultados_por_horario:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
+            if todas_operacoes:
+                st.session_state.todas_operacoes = pd.DataFrame(todas_operacoes)
+                st.write(f"✅ {len(todas_operacoes)} operações registradas e salvas.")
             else:
                 st.write("❌ Nenhuma operação foi registrada.")
 
-        # ✅ Mostrar rankings na tela principal
+        # ✅ FORA DO EXPANDER: Mostrar rankings na tela principal
         if 'resultados_por_horario' in st.session_state:
             df_rank = st.session_state.resultados_por_horario
 
@@ -362,12 +381,13 @@ if data_min_global and data_max_global:
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
-        if "todas_operacoes" in st.session_state:
+        if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
             mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
             df_filtrado = df_ops[mask]
 
             if not df_filtrado.empty:
+                # Separar em compras e vendas
                 df_compras = df_filtrado[df_filtrado['Direção'] == 'Compra']
                 df_vendas = df_filtrado[df_filtrado['Direção'] == 'Venda']
 
@@ -385,7 +405,7 @@ if data_min_global and data_max_global:
             else:
                 st.info(f"ℹ️ Nenhuma operação encontrada para {nome_acao}.")
         else:
-            st.warning("⚠️ Nenhum backtest foi rodado ainda.")
+            st.warning("⚠️ Nenhum backtest foi rodado ainda ou nenhuma operação foi registrada.")
 
 else:
     st.info("ℹ️ Aguardando upload de arquivos Excel.")
