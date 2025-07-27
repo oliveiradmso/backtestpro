@@ -11,24 +11,25 @@ def identificar_tipo(ticker):
     for prefix in ['5-MIN_', 'MINI_', 'WIN', 'WDO', 'DOL', 'IND', 'DOLZ', 'WINZ']:
         ticker = ticker.replace(prefix, '')
     
-    # Lista de tickers de ações
-    acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
+    # Verificar por palavras-chave no nome original
+    nome_original = ticker.upper()
+    if 'INDICE' in nome_original or 'WIN' in nome_original or 'IND' in nome_original:
+        return 'mini_indice'
+    if 'DOL' in nome_original or 'USD' in nome_original or 'WDO' in nome_original:
+        return 'mini_dolar'
     
+    # Lista de ações
+    acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
     for acao in acoes:
         if acao in ticker:
             return 'acoes'
-    
-    if 'WIN' in ticker or 'IND' in ticker:
-        return 'mini_indice'
-    
-    if 'DOL' in ticker or 'USD' in ticker:
-        return 'mini_dolar'
     
     return 'mini_dolar'
 
 # Interface do app
 st.title("📊 BacktestPro")
-st.subheader("Análise de distorção de abertura")
+st.subheader("Análise de distorção de preço")
+st.markdown("**Precisão, segurança e poder nas suas decisões. Acesse o futuro do mercado.**")
 
 # Verifica a senha
 senha = st.text_input("Digite a senha", type="password")
