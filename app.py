@@ -119,10 +119,6 @@ if data_min_global and data_max_global:
                 hora_inicio = time_obj(hora, minuto)
                 st.write(f"⏰ Processando horário: {horario_str}")
 
-                # ZERAR LISTAS
-                df_compra_geral = pd.DataFrame()
-                df_venda_geral = pd.DataFrame()
-
                 for file in uploaded_files:
                     try:
                         ticker_nome = file.name.split(".")[0]
@@ -221,11 +217,11 @@ if data_min_global and data_max_global:
                             lucro_total = sum(op["lucro"] for op in dfs_compra)
                             resultados_por_horario.append({
                                 "Horário": horario_str,
-                                "Direção": "Compra",
                                 "Total Eventos": total,
                                 "Acertos": acertos,
                                 "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                                "Lucro Total (R$)": f"R$ {lucro_total:.2f}"
+                                "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
+                                "Direção": "Compra"
                             })
 
                         if dfs_venda:
@@ -234,44 +230,65 @@ if data_min_global and data_max_global:
                             lucro_total = sum(op["lucro"] for op in dfs_venda)
                             resultados_por_horario.append({
                                 "Horário": horario_str,
-                                "Direção": "Venda",
                                 "Total Eventos": total,
                                 "Acertos": acertos,
                                 "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                                "Lucro Total (R$)": f"R$ {lucro_total:.2f}"
+                                "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
+                                "Direção": "Venda"
                             })
 
                     except Exception as e:
                         st.write(f"❌ Erro ao processar {file.name} no horário {horario_str}: {e}")
                         continue
 
-            if not resultados_por_horario:
-                st.write("❌ Nenhuma operação foi registrada.")
-            else:
+            # ✅ SALVAR NO SESSION STATE
+            if resultados_por_horario:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
-                st.header("🏆 Ranking por Horário")
-                df_rank = pd.DataFrame(resultados_por_horario)
-                
-                # ✅ CORREÇÃO DO ERRO DE CONVERSÃO
-                df_rank['Lucro Num'] = (
-                    df_rank['Lucro Total (R$)']
-                    .str.replace('R\$', '', regex=True)   # Remove R$
-                    .str.strip()                          # Remove espaços
-                    .str.replace(',', '.')                # Substitui vírgula
-                    .str.replace(' ', '')                 # Remove espaços entre R$ e -
-                    .astype(float)                        # Converte para número
-                )
-                
-                df_rank = df_rank.sort_values('Lucro Num', ascending=False)
-                st.dataframe(df_rank.drop('Lucro Num', axis=1), use_container_width=True)
+            else:
+                st.write("❌ Nenhuma operação foi registrada.")
 
-    # Detalhamento por ação
+        # ✅ FORA DO EXPANDER: Mostrar rankings na tela principal
+        if 'resultados_por_horario' in st.session_state:
+            df_rank = st.session_state.resultados_por_horario
+
+            # 🏆 Ranking de Compras
+            df_compras = df_rank[df_rank['Direção'] == 'Compra']
+            if not df_compras.empty:
+                st.header("🏆 Ranking de Compras")
+                df_compras['Lucro Num'] = (
+                    df_compras['Lucro Total (R$)']
+                    .str.replace('R\$', '', regex=True)
+                    .str.strip()
+                    .str.replace(',', '.')
+                    .str.replace(' ', '')
+                    .astype(float)
+                )
+                df_compras = df_compras.sort_values('Lucro Num', ascending=False)
+                st.dataframe(df_compras.drop('Lucro Num', axis=1), use_container_width=True)
+
+            # 📉 Ranking de Vendas
+            df_vendas = df_rank[df_rank['Direção'] == 'Venda']
+            if not df_vendas.empty:
+                st.header("📉 Ranking de Vendas")
+                df_vendas['Lucro Num'] = (
+                    df_vendas['Lucro Total (R$)']
+                    .str.replace('R\$', '', regex=True)
+                    .str.strip()
+                    .str.replace(',', '.')
+                    .str.replace(' ', '')
+                    .astype(float)
+                )
+                df_vendas = df_vendas.sort_values('Lucro Num', ascending=False)
+                st.dataframe(df_vendas.drop('Lucro Num', axis=1), use_container_width=True)
+
+    # 6. Detalhamento por ação
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
         if "resultados_por_horario" in st.session_state:
             df_rank = st.session_state.resultados_por_horario
-            mask = df_rank['Horário'].str.contains(nome_acao, case=False, na=False)
+            mask = df_rank['Horário'].str.contains(nome_acao, case=False, na=False) | \
+                   df_rank['Lucro Total (R$)'].str.contains(nome_acao, case=False, na=False)
             df_filtrado = df_rank[mask]
             if not df_filtrado.empty:
                 st.dataframe(df_filtrado, use_container_width=True)
