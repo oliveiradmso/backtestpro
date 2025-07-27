@@ -5,37 +5,34 @@ from datetime import datetime, time as time_obj, timedelta
 
 # Função corrigida para identificar o tipo de ativo
 def identificar_tipo(ticker):
-    ticker = ticker.upper()
+    ticker = ticker.upper().strip()
+    
+    # Remover extensão
+    if '.' in ticker:
+        ticker = ticker.split('.')[0]
     
     # Remover prefixos comuns
-    for prefix in ['5-MIN_', 'MINI_', 'WIN', 'WDO', 'DOL', 'IND', 'DOLZ', 'WINZ']:
-        ticker = ticker.replace(prefix, '')
+    for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
+        if ticker.startswith(prefix):
+            ticker = ticker[len(prefix):]
     
-    nome_original = ticker.upper()
-
-    # 1. PRIORIDADE MÁXIMA: Mini Índice
-    if 'WIN' in nome_original:
+    # Verificações seguras e prioritárias
+    if 'WIN' in ticker:
         return 'mini_indice'
-    if 'INDICE' in nome_original:
+    if 'INDICE' in ticker:
         return 'mini_indice'
-
-    # 2. Mini Dólar (mas não se for INDICE)
-    if 'WDO' in nome_original:
+    if 'WDO' in ticker:
         return 'mini_dolar'
-    if 'DOL' in nome_original and 'INDICE' not in nome_original:
+    if 'DOLAR' in ticker or 'DOL' in ticker:
         return 'mini_dolar'
-    if 'USD' in nome_original:
-        return 'mini_dolar'
-
-    # 3. Ações
+    
+    # Ações
     acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
     for acao in acoes:
         if acao in ticker:
             return 'acoes'
-
-    # 4. Padrão
-    if 'WIN' in ticker:
-        return 'mini_indice'
+    
+    # Padrão
     return 'mini_dolar'
 
 # Interface do app
