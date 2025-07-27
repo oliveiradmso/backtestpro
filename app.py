@@ -11,19 +11,23 @@ def identificar_tipo(ticker):
     for prefix in ['5-MIN_', 'MINI_', 'WIN', 'WDO', 'DOL', 'IND', 'DOLZ', 'WINZ']:
         ticker = ticker.replace(prefix, '')
     
-    # Verificar por palavras-chave no nome original
     nome_original = ticker.upper()
-    if 'INDICE' in nome_original or 'WIN' in nome_original or 'IND' in nome_original:
+
+    # Verificar primeiro: Mini Índice (prioridade)
+    if 'WIN' in nome_original or 'INDICE' in nome_original or 'IND' in nome_original:
         return 'mini_indice'
+    
+    # Depois: Mini Dólar (evita falsos positivos com "INDICE")
     if 'DOL' in nome_original or 'USD' in nome_original or 'WDO' in nome_original:
         return 'mini_dolar'
     
-    # Lista de ações
+    # Ações
     acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
     for acao in acoes:
         if acao in ticker:
             return 'acoes'
     
+    # Padrão
     return 'mini_dolar'
 
 # Interface do app
