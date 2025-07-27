@@ -173,6 +173,9 @@ if data_min_global and data_max_global:
             resultados_por_horario = []
             todas_operacoes = []  # Para detalhamento por ação
 
+            total_dias_analisados = 0
+            dias_com_sinal = 0
+
             for horario_str in horarios_selecionados:
                 hora, minuto = map(int, horario_str.split(":"))
                 hora_inicio = time_obj(hora, minuto)
@@ -197,9 +200,12 @@ if data_min_global and data_max_global:
                         df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
 
                         if df.empty:
+                            st.write(f"🟡 {file.name}: Nenhum dado no período.")
                             continue
 
                         dias_unicos = pd.unique(df['data_sozinha'])
+                        st.write(f"📅 {ticker_nome}: {len(dias_unicos)} dias no período")
+
                         dfs_compra = []
                         dfs_venda = []
 
@@ -216,6 +222,7 @@ if data_min_global and data_max_global:
                             candles_do_dia = df_pregao.sort_index()
 
                             entrada_encontrada = False
+                            total_dias_analisados += 1
 
                             for idx_entrada in candles_do_dia.index:
                                 preco_entrada = candles_do_dia.loc[idx_entrada]["open"]
@@ -224,23 +231,21 @@ if data_min_global and data_max_global:
                                 try:
                                     idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
                                     if idx_dia_atual_idx == 0:
-                                        fechamento_anterior = 0
-                                    else:
-                                        dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                                        fechamento_anterior = df[df.index.date == dia_anterior]["close"].iloc[-1]
-                                except:
-                                    fechamento_anterior = 0
+                                        continue  # Pula o primeiro dia (sem dia anterior)
+                                    dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
+                                    fechamento_anterior = df[df.index.date == dia_anterior]["close"].iloc[-1]
+                                except Exception as e:
+                                    continue
 
                                 # Calcular distorção
                                 distorcao_percentual = 0
-                                if fechamento_anterior != 0:
+                                if fechamento_anterior > 0:
                                     distorcao = preco_entrada - fechamento_anterior
                                     distorcao_percentual = (distorcao / fechamento_anterior) * 100
 
-                                # Verificar se atingiu distorção mínima
+                                # Verificar distorção mínima
                                 if not entrada_encontrada:
                                     if distorcao_percentual < -dist_compra:
-                                        # Compra
                                         idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
                                         if idx_saida in df.index and idx_saida.date() == idx_entrada.date():
                                             preco_saida = df.loc[idx_saida]["open"]
@@ -264,9 +269,9 @@ if data_min_global and data_max_global:
                                                 "Quantidade": qtd
                                             })
                                             entrada_encontrada = True
+                                            dias_com_sinal += 1
 
                                     elif distorcao_percentual > dist_venda:
-                                        # Venda
                                         idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
                                         if idx_saida in df.index and idx_saida.date() == idx_entrada.date():
                                             preco_saida = df.loc[idx_saida]["open"]
@@ -290,6 +295,7 @@ if data_min_global and data_max_global:
                                                 "Quantidade": qtd
                                             })
                                             entrada_encontrada = True
+                                            dias_com_sinal += 1
 
                                 if entrada_encontrada:
                                     break
@@ -322,8 +328,12 @@ if data_min_global and data_max_global:
                             })
 
                     except Exception as e:
-                        st.write(f"❌ Erro ao processar {file.name} no horário {horario_str}: {e}")
+                        st.write(f"❌ Erro ao processar {file.name}: {e}")
                         continue
+
+            # ✅ DEBUG: Mostrar estatísticas
+            st.write(f"📊 Dias analisados: {total_dias_analisados}")
+            st.write(f"✅ Dias com sinal: {dias_com_sinal}")
 
             # ✅ SALVAR NO SESSION STATE
             if resultados_por_horario:
