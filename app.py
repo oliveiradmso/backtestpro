@@ -316,8 +316,23 @@ if data_min_global and data_max_global:
             df_ops = st.session_state.todas_operacoes
             mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
             df_filtrado = df_ops[mask]
+
             if not df_filtrado.empty:
-                st.dataframe(df_filtrado, use_container_width=True)
+                # Separar em compras e vendas
+                df_compras = df_filtrado[df_filtrado['Direção'] == 'Compra']
+                df_vendas = df_filtrado[df_filtrado['Direção'] == 'Venda']
+
+                if not df_compras.empty:
+                    st.subheader("🛒 Detalhamento de Compras")
+                    st.dataframe(df_compras, use_container_width=True)
+                else:
+                    st.info(f"ℹ️ Nenhuma operação de compra encontrada para {nome_acao}.")
+
+                if not df_vendas.empty:
+                    st.subheader("🔻 Detalhamento de Vendas")
+                    st.dataframe(df_vendas, use_container_width=True)
+                else:
+                    st.info(f"ℹ️ Nenhuma operação de venda encontrada para {nome_acao}.")
             else:
                 st.info(f"ℹ️ Nenhuma operação encontrada para {nome_acao}.")
         else:
