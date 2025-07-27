@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time as time_obj, timedelta
 
-# Função para identificar o tipo de ativo
+# Função corrigida para identificar o tipo de ativo
 def identificar_tipo(ticker):
     ticker = ticker.upper()
     
@@ -13,13 +13,13 @@ def identificar_tipo(ticker):
     
     nome_original = ticker.upper()
 
-    # 1. Mini Índice: WIN ou INDICE
+    # 1. PRIORIDADE MÁXIMA: Mini Índice
     if 'WIN' in nome_original:
         return 'mini_indice'
     if 'INDICE' in nome_original:
         return 'mini_indice'
 
-    # 2. Mini Dólar: WDO, DOL (mas não se for INDICE)
+    # 2. Mini Dólar (mas não se for INDICE)
     if 'WDO' in nome_original:
         return 'mini_dolar'
     if 'DOL' in nome_original and 'INDICE' not in nome_original:
