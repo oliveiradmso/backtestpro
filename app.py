@@ -48,6 +48,7 @@ data_max_global = None
 if uploaded_files:
     st.info(f"✅ {len(uploaded_files)} arquivo(s) carregado(s). Processando...")
 
+    # Pré-processar para obter o período disponível
     for file in uploaded_files:
         try:
             df = pd.read_excel(file)
@@ -94,7 +95,7 @@ if data_min_global and data_max_global:
     dist_compra = st.number_input("Distorção mínima COMPRA (%)", value=0.3)
     dist_venda = st.number_input("Distorção mínima VENDA (%)", value=0.3)
     
-    # Horários disponíveis (5 em 5 minutos)
+    # Horários disponíveis
     todos_horarios = [
         "10:00", "10:05", "10:10", "10:15", "10:20", "10:25", "10:30",
         "10:35", "10:40", "10:45", "10:50", "10:55", "11:00", "11:05"
@@ -195,7 +196,7 @@ if data_min_global and data_max_global:
                             elif tipo_ativo == "mini_dolar":
                                 valor_ponto = 10.00
                             else:
-                                valor_ponto = 1.00  # será usado como multiplicador direto
+                                valor_ponto = 1.00
 
                             # Compra
                             if distorcao_percentual < -dist_compra:
@@ -250,7 +251,17 @@ if data_min_global and data_max_global:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
                 st.header("🏆 Ranking por Horário")
                 df_rank = pd.DataFrame(resultados_por_horario)
-                df_rank['Lucro Num'] = df_rank['Lucro Total (R$)'].str.replace('R\$', '').str.replace(',', '.').astype(float)
+                
+                # ✅ CORREÇÃO DO ERRO DE CONVERSÃO
+                df_rank['Lucro Num'] = (
+                    df_rank['Lucro Total (R$)']
+                    .str.replace('R\$', '', regex=True)   # Remove R$
+                    .str.strip()                          # Remove espaços
+                    .str.replace(',', '.')                # Substitui vírgula
+                    .str.replace(' ', '')                 # Remove espaços entre R$ e -
+                    .astype(float)                        # Converte para número
+                )
+                
                 df_rank = df_rank.sort_values('Lucro Num', ascending=False)
                 st.dataframe(df_rank.drop('Lucro Num', axis=1), use_container_width=True)
 
