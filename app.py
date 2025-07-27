@@ -18,7 +18,7 @@ def identificar_tipo(ticker):
         if acao in ticker:
             return 'acoes'
     
-    if 'WIN' in ticker or 'WDO' in ticker or 'IND' in ticker:
+    if 'WIN' in ticker or 'IND' in ticker:
         return 'mini_indice'
     
     if 'DOL' in ticker or 'USD' in ticker:
@@ -204,16 +204,17 @@ if data_min_global and data_max_global:
                                 distorcao = preco_entrada - fechamento_anterior
                                 distorcao_percentual = (distorcao / fechamento_anterior) * 100
 
-                            # Valor por ponto
-                            valor_ponto = 1.00
-                            if tipo_ativo == "mini_indice":
+                            # Valor por ponto (R$ por ponto por contrato)
+                            if tipo_ativo == "acoes":
+                                valor_ponto = 0.01
+                            elif tipo_ativo == "mini_indice":
                                 valor_ponto = 0.20
                             elif tipo_ativo == "mini_dolar":
-                                valor_ponto = 0.50
+                                valor_ponto = 10.00
 
                             # Compra: mercado caiu
                             if distorcao_percentual < -dist_compra:
-                                lucro_reais = qtd * (preco_saida - preco_entrada) * valor_ponto
+                                lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
                                 retorno = (preco_saida - preco_entrada) / preco_entrada * 100
                                 dfs_compra.append({
                                     "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
@@ -228,7 +229,7 @@ if data_min_global and data_max_global:
 
                             # Venda: mercado subiu
                             if distorcao_percentual > dist_venda:
-                                lucro_reais = qtd * (preco_entrada - preco_saida) * valor_ponto
+                                lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
                                 retorno = (preco_entrada - preco_saida) / preco_entrada * 100
                                 dfs_venda.append({
                                     "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
