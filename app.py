@@ -216,13 +216,14 @@ if data_min_global and data_max_global:
                             # Compra: mercado caiu
                             if distorcao_percentual < -dist_compra:
                                 lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
+                                lucro_formatado = round(lucro_reais, 2)
                                 retorno = (preco_saida - preco_entrada) / preco_entrada * 100
                                 dfs_compra.append({
                                     "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
                                     "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
                                     "Preço Entrada": round(preco_entrada, 2),
                                     "Preço Saída": round(preco_saida, 2),
-                                    "Lucro (R$)": round(lucro_reais, 2),
+                                    "Lucro (R$)": lucro_formatado,
                                     "Retorno (%)": f"{retorno:.2f}%",
                                     "Ação": ticker_nome,
                                     "Distorção (%)": f"{distorcao_percentual:.2f}%"
@@ -231,13 +232,14 @@ if data_min_global and data_max_global:
                             # Venda: mercado subiu
                             if distorcao_percentual > dist_venda:
                                 lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
+                                lucro_formatado = round(lucro_reais, 2)
                                 retorno = (preco_entrada - preco_saida) / preco_entrada * 100
                                 dfs_venda.append({
                                     "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
                                     "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
                                     "Preço Entrada": round(preco_entrada, 2),
                                     "Preço Saída": round(preco_saida, 2),
-                                    "Lucro (R$)": round(lucro_reais, 2),
+                                    "Lucro (R$)": lucro_formatado,
                                     "Retorno (%)": f"{retorno:.2f}%",
                                     "Ação": ticker_nome,
                                     "Distorção (%)": f"{distorcao_percentual:.2f}%"
