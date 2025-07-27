@@ -113,6 +113,7 @@ if data_min_global and data_max_global:
 
             # Armazenar resultados por horário
             resultados_por_horario = []
+            todas_operacoes = []  # Para detalhamento por ação
 
             for horario_str in horarios_selecionados:
                 hora, minuto = map(int, horario_str.split(":"))
@@ -201,6 +202,18 @@ if data_min_global and data_max_global:
                                 else:
                                     lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
                                 dfs_compra.append({"lucro": lucro_reais, "distorcao": distorcao_percentual})
+                                todas_operacoes.append({
+                                    "Ação": ticker_nome,
+                                    "Direção": "Compra",
+                                    "Horário": horario_str,
+                                    "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                                    "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                                    "Preço Entrada": round(preco_entrada, 2),
+                                    "Preço Saída": round(preco_saida, 2),
+                                    "Lucro (R$)": round(lucro_reais, 2),
+                                    "Distorção (%)": f"{distorcao_percentual:.2f}%",
+                                    "Quantidade": qtd
+                                })
 
                             # Venda
                             if distorcao_percentual > dist_venda:
@@ -209,8 +222,20 @@ if data_min_global and data_max_global:
                                 else:
                                     lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
                                 dfs_venda.append({"lucro": lucro_reais, "distorcao": distorcao_percentual})
+                                todas_operacoes.append({
+                                    "Ação": ticker_nome,
+                                    "Direção": "Venda",
+                                    "Horário": horario_str,
+                                    "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                                    "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                                    "Preço Entrada": round(preco_entrada, 2),
+                                    "Preço Saída": round(preco_saida, 2),
+                                    "Lucro (R$)": round(lucro_reais, 2),
+                                    "Distorção (%)": f"{distorcao_percentual:.2f}%",
+                                    "Quantidade": qtd
+                                })
 
-                        # Acumular resultados
+                        # Acumular resultados por horário
                         if dfs_compra:
                             total = len(dfs_compra)
                             acertos = len([op for op in dfs_compra if op["lucro"] > 0])
@@ -244,6 +269,8 @@ if data_min_global and data_max_global:
             # ✅ SALVAR NO SESSION STATE
             if resultados_por_horario:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
+            if todas_operacoes:
+                st.session_state.todas_operacoes = pd.DataFrame(todas_operacoes)
             else:
                 st.write("❌ Nenhuma operação foi registrada.")
 
@@ -285,15 +312,14 @@ if data_min_global and data_max_global:
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
-        if "resultados_por_horario" in st.session_state:
-            df_rank = st.session_state.resultados_por_horario
-            mask = df_rank['Horário'].str.contains(nome_acao, case=False, na=False) | \
-                   df_rank['Lucro Total (R$)'].str.contains(nome_acao, case=False, na=False)
-            df_filtrado = df_rank[mask]
+        if "todas_operacoes" in st.session_state:
+            df_ops = st.session_state.todas_operacoes
+            mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
+            df_filtrado = df_ops[mask]
             if not df_filtrado.empty:
                 st.dataframe(df_filtrado, use_container_width=True)
             else:
-                st.info("ℹ️ Nenhum dado encontrado.")
+                st.info(f"ℹ️ Nenhuma operação encontrada para {nome_acao}.")
         else:
             st.warning("⚠️ Nenhum backtest foi rodado ainda.")
 
