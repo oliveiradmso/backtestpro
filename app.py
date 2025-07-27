@@ -299,11 +299,7 @@ if data_min_global and data_max_global:
                                 if entrada_encontrada:
                                     break
 
-                    except Exception as e:
-                        st.write(f"❌ Erro ao processar {file.name}: {e}")
-                        continue
-
-                # ✅ Acumular resultados por horário (fora do loop de arquivos)
+                # ✅ Acumular resultados por horário (fora do loop de arquivos, dentro do horário)
                 if dfs_compra:
                     total = len(dfs_compra)
                     acertos = len([op for op in dfs_compra if op["lucro"] > 0])
