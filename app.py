@@ -334,14 +334,15 @@ if data_min_global and data_max_global:
             st.write(f"📊 Dias analisados: {total_dias_analisados}")
             st.write(f"✅ Dias com sinal: {dias_com_sinal}")
 
-            # ✅ SALVAR NO SESSION STATE
+            # ✅ SALVAR NO SESSION STATE (APENAS UMA VEZ, SEM INTERFERÊNCIA POSTERIOR)
             if resultados_por_horario:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
             if todas_operacoes:
                 st.session_state.todas_operacoes = pd.DataFrame(todas_operacoes)
-                st.write(f"✅ {len(todas_operacoes)} operações registradas e salvas.")
+                st.write(f"✅ Backtest concluído: {len(todas_operacoes)} operações registradas.")
             else:
                 st.write("❌ Nenhuma operação foi registrada.")
+                st.session_state.todas_operacoes = pd.DataFrame()
 
         # ✅ FORA DO EXPANDER: Mostrar rankings na tela principal
         if 'resultados_por_horario' in st.session_state:
@@ -381,6 +382,7 @@ if data_min_global and data_max_global:
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
     if st.button("📥 Mostrar detalhamento") and nome_acao:
+        # ✅ Verificar se o backtest foi rodado e os dados estão no session_state
         if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
             mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
