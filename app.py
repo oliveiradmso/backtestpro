@@ -3,13 +3,9 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time as time_obj, timedelta
 
-# Função para extrair nome limpo do ativo (sem prefixo nem .xlsx)
-def extrair_nome_limpo(file_name):
-    base = file_name.split(".")[0]  # Remove .xlsx
-    for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
-        if base.startswith(prefix):
-            base = base[len(prefix):]
-    return base.strip()
+# Função para extrair nome limpo do ativo (sem .xlsx, mas mantém prefixo como 5-MIN_)
+def extrair_nome_completo(file_name):
+    return file_name.split(".")[0]  # Ex: 5-MIN_PETR4.xlsx → 5-MIN_PETR4
 
 # Interface do app
 st.title("📊 BacktestPro")
@@ -165,7 +161,7 @@ if data_min_global and data_max_global:
         with st.expander("ℹ️ Ver detalhes do processamento", expanded=False):
             st.write("🔄 Iniciando processamento...")
 
-            # Armazenar todas as operações
+            # Armazenar todas as operações (para detalhamento)
             todas_operacoes = []
 
             for horario_str in horarios_selecionados:
@@ -175,7 +171,7 @@ if data_min_global and data_max_global:
 
                 for file in uploaded_files:
                     try:
-                        ticker_nome = extrair_nome_limpo(file.name)
+                        ticker_nome = extrair_nome_completo(file.name)
                         df = pd.read_excel(file)
                         df.columns = [str(col).strip().capitalize() for col in df.columns]
                         df.rename(columns={'Data': 'data', 'Abertura': 'open', 'Máxima': 'high', 'Mínima': 'low', 'Fechamento': 'close'}, inplace=True)
@@ -243,10 +239,15 @@ if data_min_global and data_max_global:
 
                                 todas_operacoes.append({
                                     "Ação": ticker_nome,
-                                    "Horário": horario_str,
                                     "Direção": "Compra",
+                                    "Horário": idx_entrada.strftime("%H:%M"),
+                                    "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                                    "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                                    "Preço Entrada": round(preco_entrada, 2),
+                                    "Preço Saída": round(preco_saida, 2),
+                                    "Lucro (R$)": round(lucro_reais, 2),
                                     "Distorção (%)": f"{distorcao_percentual:.2f}%",
-                                    "Lucro (R$)": lucro_reais
+                                    "Quantidade": qtd
                                 })
 
                             elif distorcao_percentual > dist_venda:
@@ -258,10 +259,15 @@ if data_min_global and data_max_global:
 
                                 todas_operacoes.append({
                                     "Ação": ticker_nome,
-                                    "Horário": horario_str,
                                     "Direção": "Venda",
+                                    "Horário": idx_entrada.strftime("%H:%M"),
+                                    "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                                    "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                                    "Preço Entrada": round(preco_entrada, 2),
+                                    "Preço Saída": round(preco_saida, 2),
+                                    "Lucro (R$)": round(lucro_reais, 2),
                                     "Distorção (%)": f"{distorcao_percentual:.2f}%",
-                                    "Lucro (R$)": lucro_reais
+                                    "Quantidade": qtd
                                 })
 
                     except Exception as e:
@@ -281,7 +287,7 @@ if data_min_global and data_max_global:
                         Lucro_Total=('Lucro (R$)', 'sum')
                     ).reset_index()
 
-                    # ✅ ORDENAR ANTES DE FORMATAR
+                    # Ordenar pelo lucro total
                     resumo_compras = resumo_compras.sort_values('Lucro_Total', ascending=False).copy()
 
                     resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total_Eventos']).map("{:.2%}".format)
@@ -303,7 +309,6 @@ if data_min_global and data_max_global:
                         Lucro_Total=('Lucro (R$)', 'sum')
                     ).reset_index()
 
-                    # ✅ ORDENAR ANTES DE FORMATAR
                     resumo_vendas = resumo_vendas.sort_values('Lucro_Total', ascending=False).copy()
 
                     resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total_Eventos']).map("{:.2%}".format)
@@ -331,6 +336,11 @@ if data_min_global and data_max_global:
         df_filtrado = df_ops[mask]
 
         if not df_filtrado.empty:
+            # Reordenar colunas como você quer
+            df_filtrado = df_filtrado[[
+                'Ação', 'Direção', 'Horário', 'Data Entrada', 'Data Saída',
+                'Preço Entrada', 'Preço Saída', 'Lucro (R$)', 'Distorção (%)', 'Quantidade'
+            ]]
             st.dataframe(df_filtrado, use_container_width=True)
         else:
             st.info(f"ℹ️ Nenhuma operação encontrada para {nome_acao}.")
