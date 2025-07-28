@@ -381,39 +381,46 @@ if data_min_global and data_max_global:
                 ["TODOS"] + ativos_disponiveis
             )
 
-            df_rank_original = st.session_state.resultados_por_horario.copy()
             df_ops = st.session_state.todas_operacoes.copy() if "todas_operacoes" in st.session_state else pd.DataFrame()
 
             if ativo_selecionado != "TODOS":
-                # Filtrar operações por ativo
-                ops_filtradas = df_ops[df_ops['Ação'] == ativo_selecionado]
-                if ops_filtradas.empty:
-                    st.warning(f"⚠️ Nenhuma operação encontrada para {ativo_selecionado}.")
+                ticker_base = ativo_selecionado.split(".")[0]
+                if df_ops.empty:
+                    st.warning("⚠️ Nenhuma operação registrada.")
                     df_rank = pd.DataFrame()
                 else:
-                    # Recalcular ranking para este ativo
-                    resultados_filtrados = []
-                    for horario in ops_filtradas['Horário'].unique():
-                        for direcao in ['Compra', 'Venda']:
-                            ops_hora = ops_filtradas[(ops_filtradas['Horário'] == horario) & (ops_filtradas['Direção'] == direcao)]
-                            if len(ops_hora) > 0:
-                                total = len(ops_hora)
-                                acertos = len(ops_hora[ops_hora['Lucro (R$)'] > 0])
-                                lucro_total = ops_hora['Lucro (R$)'].sum()
-                                resultados_filtrados.append({
-                                    "Horário": horario,
-                                    "Total Eventos": total,
-                                    "Acertos": acertos,
-                                    "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                                    "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
-                                    "Direção": direcao
-                                })
-                    df_rank = pd.DataFrame(resultados_filtrados) if resultados_filtrados else pd.DataFrame()
+                    ops_filtradas = df_ops[df_ops['Ação'] == ticker_base]
+                    if ops_filtradas.empty:
+                        st.warning(f"⚠️ Nenhuma operação encontrada para **{ticker_base}**.")
+                        df_rank = pd.DataFrame()
+                    else:
+                        resultados_filtrados = []
+                        for horario in ops_filtradas['Horário'].unique():
+                            for direcao in ['Compra', 'Venda']:
+                                ops_hora = ops_filtradas[
+                                    (ops_filtradas['Horário'] == horario) &
+                                    (ops_filtradas['Direção'] == direcao)
+                                ]
+                                if len(ops_hora) > 0:
+                                    total = len(ops_hora)
+                                    acertos = len(ops_hora[ops_hora['Lucro (R$)'] > 0])
+                                    lucro_total = ops_hora['Lucro (R$)'].sum()
+                                    resultados_filtrados.append({
+                                        "Horário": horario,
+                                        "Total Eventos": total,
+                                        "Acertos": acertos,
+                                        "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
+                                        "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
+                                        "Direção": direcao
+                                    })
+                        df_rank = pd.DataFrame(resultados_filtrados) if resultados_filtrados else pd.DataFrame()
             else:
-                df_rank = df_rank_original  # Mostra todos
+                df_rank = st.session_state.resultados_por_horario.copy()
 
-            # Mostrar rankings
-            if not df_rank.empty:
+            # ✅ Mostrar rankings
+            if df_rank.empty:
+                st.info("ℹ️ Nenhum dado disponível para exibição.")
+            else:
                 # 🏆 Ranking de Compras
                 df_compras = df_rank[df_rank['Direção'] == 'Compra']
                 if not df_compras.empty:
@@ -428,6 +435,8 @@ if data_min_global and data_max_global:
                     )
                     df_compras = df_compras.sort_values('Lucro Num', ascending=False)
                     st.dataframe(df_compras.drop('Lucro Num', axis=1), use_container_width=True)
+                else:
+                    st.info(f"ℹ️ Nenhuma operação de **compra** registrada para **{ativo_selecionado}**.")
 
                 # 📉 Ranking de Vendas
                 df_vendas = df_rank[df_rank['Direção'] == 'Venda']
@@ -443,8 +452,8 @@ if data_min_global and data_max_global:
                     )
                     df_vendas = df_vendas.sort_values('Lucro Num', ascending=False)
                     st.dataframe(df_vendas.drop('Lucro Num', axis=1), use_container_width=True)
-            else:
-                st.warning("⚠️ Nenhum dado disponível para o ativo selecionado.")
+                else:
+                    st.info(f"ℹ️ Nenhuma operação de **venda** registrada para **{ativo_selecionado}**.")
 
     # 6. Detalhamento por ação
     st.header("🔍 Detalhamento por Ação")
@@ -456,7 +465,6 @@ if data_min_global and data_max_global:
             df_filtrado = df_ops[mask]
 
             if not df_filtrado.empty:
-                # Separar em compras e vendas
                 df_compras = df_filtrado[df_filtrado['Direção'] == 'Compra']
                 df_vendas = df_filtrado[df_filtrado['Direção'] == 'Venda']
 
