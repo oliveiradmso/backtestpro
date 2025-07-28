@@ -3,34 +3,26 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time as time_obj, timedelta
 
-# Função corrigida para identificar o tipo de ativo
-def identificar_tipo(ticker):
-    ticker = ticker.upper().strip()
-    if '.' in ticker:
-        ticker = ticker.split('.')[0]
-    for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
-        if ticker.startswith(prefix):
-            ticker = ticker[len(prefix):]
-    
-    if 'WIN' in ticker or 'INDICE' in ticker:
-        return 'mini_indice'
-    if 'WDO' in ticker or 'DOLAR' in ticker or 'DOL' in ticker:
-        return 'mini_dolar'
-    
-    acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
-    for acao in acoes:
-        if acao in ticker:
-            return 'acoes'
-    
-    return 'mini_dolar'
-
-# Nova função: extrair nome limpo do ativo (sem prefixos, com nome original)
+# Função para extrair o nome limpo do ativo (sem prefixos)
 def extrair_nome_limpo(file_name):
     base = file_name.split(".")[0]  # Remove .xlsx
     for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
         if base.startswith(prefix):
             base = base[len(prefix):]
     return base.strip()
+
+# Função para identificar o tipo de ativo
+def identificar_tipo(ticker):
+    ticker = ticker.upper().strip()
+    if 'WIN' in ticker or 'INDICE' in ticker:
+        return 'mini_indice'
+    if 'WDO' in ticker or 'DOLAR' in ticker or 'DOL' in ticker:
+        return 'mini_dolar'
+    acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
+    for acao in acoes:
+        if acao in ticker:
+            return 'acoes'
+    return 'mini_dolar'
 
 # Interface do app
 st.title("📊 BacktestPro")
@@ -131,7 +123,7 @@ if data_min_global and data_max_global:
             "17:00"
         ]
         horario_inicial, horario_final = "10:00", "17:00"
-    else:  # mini_indice ou mini_dolar
+    else:
         todos_horarios = [
             "09:00", "09:05", "09:10", "09:15", "09:20", "09:25", "09:30",
             "09:35", "09:40", "09:45", "09:50", "09:55", "10:00", "10:05",
@@ -188,24 +180,22 @@ if data_min_global and data_max_global:
 
             # Armazenar resultados por horário
             resultados_por_horario = []
-            todas_operacoes = []  # Para detalhamento por ação
-
-            total_dias_analisados = 0
-            dias_com_sinal = 0
+            todas_operacoes = []
 
             for horario_str in horarios_selecionados:
                 hora, minuto = map(int, horario_str.split(":"))
                 hora_inicio = time_obj(hora, minuto)
                 st.write(f"⏰ Processando horário: {horario_str}")
 
-                # ✅ Listas limpas para CADA horário
+                # Listas por horário
                 operacoes_horario = []
 
                 for file in uploaded_files:
                     try:
-                        # ✅ EXTRAÇÃO PADRONIZADA DO NOME
+                        # ✅ EXTRAÇÃO PADRONIZADA E IMUTÁVEL DO NOME
+                        nome_original = file.name.split(".")[0]
                         ticker_nome = extrair_nome_limpo(file.name)
-                        tipo_arquivo = identificar_tipo(file.name)
+                        tipo_arquivo = identificar_tipo(ticker_nome)
 
                         if tipo_arquivo != tipo_ativo:
                             continue
@@ -251,11 +241,11 @@ if data_min_global and data_max_global:
                                 continue
                             preco_saida = df.loc[idx_saida]["open"]
 
-                            # Calcular referência com base na seleção
+                            # Calcular referência
                             try:
                                 idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
                                 if idx_dia_atual_idx == 0:
-                                    continue  # Pula o primeiro dia
+                                    continue
                                 dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
                             except:
                                 continue
@@ -341,7 +331,7 @@ if data_min_global and data_max_global:
                         st.write(f"❌ Erro ao processar {file.name}: {e}")
                         continue
 
-                # ✅ Calcular resultados para este horário
+                # Calcular resultados para este horário
                 compras = [op for op in operacoes_horario if op["tipo"] == "Compra"]
                 vendas = [op for op in operacoes_horario if op["tipo"] == "Venda"]
 
@@ -371,7 +361,7 @@ if data_min_global and data_max_global:
                         "Direção": "Venda"
                     })
 
-            # ✅ SALVAR NO SESSION STATE (APENAS UMA VEZ)
+            # ✅ SALVAR NO SESSION STATE
             if resultados_por_horario:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
             if todas_operacoes:
@@ -383,50 +373,49 @@ if data_min_global and data_max_global:
 
         # ✅ Mostrar rankings na tela principal
         if 'resultados_por_horario' in st.session_state:
-            # ✅ Filtro por ativo
-            ativos_disponiveis = sorted(list(set([extrair_nome_limpo(file.name) for file in uploaded_files])))
+            # ✅ Filtro por ativo: usar os NOMES LIMPOS que estão em todas_operacoes
+            if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
+                ativos_disponiveis = sorted(st.session_state.todas_operacoes['Ação'].unique())
+            else:
+                ativos_disponiveis = []
+
             ativo_selecionado = st.selectbox(
                 "🎯 Selecione o ativo para exibir no ranking",
                 ["TODOS"] + ativos_disponiveis
             )
 
-            df_ops = st.session_state.todas_operacoes.copy() if "todas_operacoes" in st.session_state else pd.DataFrame()
+            df_ops = st.session_state.todas_operacoes.copy()
 
             if ativo_selecionado != "TODOS":
-                if df_ops.empty:
-                    st.warning("⚠️ Nenhuma operação registrada.")
+                ops_filtradas = df_ops[df_ops['Ação'] == ativo_selecionado]
+                if ops_filtradas.empty:
+                    st.warning(f"⚠️ Nenhuma operação encontrada para **{ativo_selecionado}**.")
                     df_rank = pd.DataFrame()
                 else:
-                    # ✅ FILTRO COM NOME LIMPO
-                    ops_filtradas = df_ops[df_ops['Ação'] == ativo_selecionado]
-                    if ops_filtradas.empty:
-                        st.warning(f"⚠️ Nenhuma operação encontrada para **{ativo_selecionado}**.")
-                        df_rank = pd.DataFrame()
-                    else:
-                        resultados_filtrados = []
-                        for horario in ops_filtradas['Horário'].unique():
-                            for direcao in ['Compra', 'Venda']:
-                                ops_hora = ops_filtradas[
-                                    (ops_filtradas['Horário'] == horario) &
-                                    (ops_filtradas['Direção'] == direcao)
-                                ]
-                                if len(ops_hora) > 0:
-                                    total = len(ops_hora)
-                                    acertos = len(ops_hora[ops_hora['Lucro (R$)'] > 0])
-                                    lucro_total = ops_hora['Lucro (R$)'].sum()
-                                    resultados_filtrados.append({
-                                        "Horário": horario,
-                                        "Total Eventos": total,
-                                        "Acertos": acertos,
-                                        "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                                        "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
-                                        "Direção": direcao
-                                    })
-                        df_rank = pd.DataFrame(resultados_filtrados) if resultados_filtrados else pd.DataFrame()
+                    resultados_filtrados = []
+                    for horario in ops_filtradas['Horário'].unique():
+                        for direcao in ['Compra', 'Venda']:
+                            ops_hora = ops_filtradas[
+                                (ops_filtradas['Horário'] == horario) &
+                                (ops_filtradas['Direção'] == direcao)
+                            ]
+                            if len(ops_hora) > 0:
+                                total = len(ops_hora)
+                                acertos = len(ops_hora[ops_hora['Lucro (R$)'] > 0])
+                                lucro_total = ops_hora['Lucro (R$)'].sum()
+                                resultados_filtrados.append({
+                                    "Horário": horario,
+                                    "Total Eventos": total,
+                                    "Acertos": acertos,
+                                    "Taxa de Acerto": f"{acertos/total:.2%}",
+                                    "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
+                                    "Direção": direcao
+                                })
+                    df_rank = pd.DataFrame(resultados_filtrados)
             else:
                 df_rank = st.session_state.resultados_por_horario.copy()
 
-            # ✅ Mostrar rankings
+            # Mostrar rankings
             if df_rank.empty:
                 st.info("ℹ️ Nenhum dado disponível para exibição.")
             else:
@@ -444,8 +433,6 @@ if data_min_global and data_max_global:
                     )
                     df_compras = df_compras.sort_values('Lucro Num', ascending=False)
                     st.dataframe(df_compras.drop('Lucro Num', axis=1), use_container_width=True)
-                else:
-                    st.info(f"ℹ️ Nenhuma operação de **compra** registrada para **{ativo_selecionado}**.")
 
                 # 📉 Ranking de Vendas
                 df_vendas = df_rank[df_rank['Direção'] == 'Venda']
@@ -461,8 +448,6 @@ if data_min_global and data_max_global:
                     )
                     df_vendas = df_vendas.sort_values('Lucro Num', ascending=False)
                     st.dataframe(df_vendas.drop('Lucro Num', axis=1), use_container_width=True)
-                else:
-                    st.info(f"ℹ️ Nenhuma operação de **venda** registrada para **{ativo_selecionado}**.")
 
     # 6. Detalhamento por ação
     st.header("🔍 Detalhamento por Ação")
