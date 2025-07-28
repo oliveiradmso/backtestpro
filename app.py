@@ -301,72 +301,92 @@ if data_min_global and data_max_global:
                         st.write(f"❌ Erro ao processar {file.name}: {e}")
                         continue
 
-            # ✅ Gerar ranking final
+            # ✅ Salvar para uso posterior
             if todas_operacoes:
                 df_ops = pd.DataFrame(todas_operacoes)
-
-                # 🏆 Ranking de Compras
-                df_compras = df_ops[df_ops['Direção'] == 'Compra']
-                if not df_compras.empty:
-                    resumo_compras = df_compras.groupby(['Ação', 'Horário']).agg(
-                        Total_Eventos=('Lucro (R$)', 'count'),
-                        Acertos=('Lucro (R$)', lambda x: (x > 0).sum()),
-                        Lucro_Total=('Lucro (R$)', 'sum')
-                    ).reset_index()
-
-                    resumo_compras = resumo_compras.sort_values('Lucro_Total', ascending=False).copy()
-                    resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total_Eventos']).map("{:.2%}".format)
-                    resumo_compras['Lucro Total (R$)'] = "R$ " + resumo_compras['Lucro_Total'].map("{:.2f}".format)
-
-                    resumo_compras = resumo_compras[[
-                        'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
-                    ]]
-
-                    st.header("🏆 Ranking de Compras")
-                    st.dataframe(resumo_compras, use_container_width=True)
-
-                # 📉 Ranking de Vendas
-                df_vendas = df_ops[df_ops['Direção'] == 'Venda']
-                if not df_vendas.empty:
-                    resumo_vendas = df_vendas.groupby(['Ação', 'Horário']).agg(
-                        Total_Eventos=('Lucro (R$)', 'count'),
-                        Acertos=('Lucro (R$)', lambda x: (x > 0).sum()),
-                        Lucro_Total=('Lucro (R$)', 'sum')
-                    ).reset_index()
-
-                    resumo_vendas = resumo_vendas.sort_values('Lucro_Total', ascending=False).copy()
-                    resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total_Eventos']).map("{:.2%}".format)
-                    resumo_vendas['Lucro Total (R$)'] = "R$ " + resumo_vendas['Lucro_Total'].map("{:.2f}".format)
-
-                    resumo_vendas = resumo_vendas[[
-                        'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
-                    ]]
-
-                    st.header("📉 Ranking de Vendas")
-                    st.dataframe(resumo_vendas, use_container_width=True)
-
-                # ✅ Salvar para detalhamento
                 st.session_state.todas_operacoes = df_ops
-
+                st.write(f"✅ Backtest concluído: {len(df_ops)} operações registradas.")
             else:
                 st.warning("❌ Nenhuma operação foi registrada.")
+                st.session_state.todas_operacoes = pd.DataFrame()
 
-    # 6. Detalhamento por ação
+        # ✅ Mostrar o ranking na tela principal (fora do expander)
+        if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
+            df_ops = st.session_state.todas_operacoes
+
+            # 🏆 Ranking de Compras
+            df_compras = df_ops[df_ops['Direção'] == 'Compra']
+            if not df_compras.empty:
+                resumo_compras = df_compras.groupby(['Ação', 'Horário']).agg(
+                    Total_Eventos=('Lucro (R$)', 'count'),
+                    Acertos=('Lucro (R$)', lambda x: (x > 0).sum()),
+                    Lucro_Total=('Lucro (R$)', 'sum')
+                ).reset_index()
+
+                resumo_compras = resumo_compras.sort_values('Lucro_Total', ascending=False).copy()
+                resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total_Eventos']).map("{:.2%}".format)
+                resumo_compras['Lucro Total (R$)'] = "R$ " + resumo_compras['Lucro_Total'].map("{:.2f}".format)
+
+                resumo_compras = resumo_compras[[
+                    'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
+                ]]
+
+                st.header("🏆 Ranking de Compras")
+                st.dataframe(resumo_compras, use_container_width=True)
+
+            # 📉 Ranking de Vendas
+            df_vendas = df_ops[df_ops['Direção'] == 'Venda']
+            if not df_vendas.empty:
+                resumo_vendas = df_vendas.groupby(['Ação', 'Horário']).agg(
+                    Total_Eventos=('Lucro (R$)', 'count'),
+                    Acertos=('Lucro (R$)', lambda x: (x > 0).sum()),
+                    Lucro_Total=('Lucro (R$)', 'sum')
+                ).reset_index()
+
+                resumo_vendas = resumo_vendas.sort_values('Lucro_Total', ascending=False).copy()
+                resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total_Eventos']).map("{:.2%}".format)
+                resumo_vendas['Lucro Total (R$)'] = "R$ " + resumo_vendas['Lucro_Total'].map("{:.2f}".format)
+
+                resumo_vendas = resumo_vendas[[
+                    'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
+                ]]
+
+                st.header("📉 Ranking de Vendas")
+                st.dataframe(resumo_vendas, use_container_width=True)
+
+    # 6. Detalhamento por ação (separado em compras e vendas)
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
+
     if st.button("📥 Mostrar detalhamento") and nome_acao and "todas_operacoes" in st.session_state:
         df_ops = st.session_state.todas_operacoes
         mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
         df_filtrado = df_ops[mask]
 
         if not df_filtrado.empty:
-            df_filtrado = df_filtrado[[
-                'Ação', 'Direção', 'Horário', 'Data Entrada', 'Data Saída',
+            # Separar em compras e vendas
+            df_compras = df_filtrado[df_filtrado['Direção'] == 'Compra']
+            df_vendas = df_filtrado[df_filtrado['Direção'] == 'Venda']
+
+            # Reordenar colunas
+            colunas = [
+                'Ação', 'Horário', 'Data Entrada', 'Data Saída',
                 'Preço Entrada', 'Preço Saída', 'Lucro (R$)', 'Distorção (%)', 'Quantidade'
-            ]]
-            st.dataframe(df_filtrado, use_container_width=True)
+            ]
+
+            if not df_compras.empty:
+                st.subheader("🟢 Detalhamento de Compras")
+                st.dataframe(df_compras[colunas], use_container_width=True)
+            else:
+                st.info(f"ℹ️ Nenhuma operação de compra encontrada para **{nome_acao}**.")
+
+            if not df_vendas.empty:
+                st.subheader("🔴 Detalhamento de Vendas")
+                st.dataframe(df_vendas[colunas], use_container_width=True)
+            else:
+                st.info(f"ℹ️ Nenhuma operação de venda encontrada para **{nome_acao}**.")
         else:
-            st.info(f"ℹ️ Nenhuma operação encontrada para {nome_acao}.")
+            st.info(f"ℹ️ Nenhuma operação encontrada para **{nome_acao}**.")
     elif "todas_operacoes" not in st.session_state:
         st.warning("⚠️ Rode o backtest primeiro.")
 
