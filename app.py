@@ -28,6 +28,154 @@ def identificar_tipo(ticker):
 
     return 'mini_dolar'
 
+# Função cacheada para processar o backtest
+@st.cache_data(show_spinner=False)
+def processar_backtest(
+    uploaded_files,
+    tipo_ativo,
+    qtd,
+    candles_pos_entrada,
+    dist_compra,
+    dist_venda,
+    referencia,
+    horarios_selecionados,
+    data_inicio,
+    data_fim
+):
+    todas_operacoes = []
+
+    for horario_str in horarios_selecionados:
+        hora, minuto = map(int, horario_str.split(":"))
+        hora_inicio = time_obj(hora, minuto)
+
+        for file in uploaded_files:
+            try:
+                ticker_nome = extrair_nome_completo(file.name)
+                tipo_arquivo = identificar_tipo(ticker_nome)
+
+                if tipo_arquivo != tipo_ativo:
+                    continue
+
+                df = pd.read_excel(file)
+                df.columns = [str(col).strip().capitalize() for col in df.columns]
+                df.rename(columns={'Data': 'data', 'Abertura': 'open', 'Máxima': 'high', 'Mínima': 'low', 'Fechamento': 'close'}, inplace=True)
+                df['data'] = pd.to_datetime(df['data'], dayfirst=True, errors='coerce')
+                df = df.dropna(subset=['data'])
+                df['data_limpa'] = df['data'].dt.floor('min')
+                df = df.set_index('data_limpa').sort_index()
+                df['data_sozinha'] = df.index.date
+                df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
+
+                if df.empty:
+                    continue
+
+                dias_unicos = pd.unique(df['data_sozinha'])
+
+                for i in range(len(dias_unicos)):
+                    dia_atual = dias_unicos[i]
+                    df_dia_atual = df[df['data_sozinha'] == dia_atual].copy()
+                    mascara_pregao = (df_dia_atual.index.time >= time_obj(9, 0)) & (df_dia_atual.index.time <= time_obj(17, 30))
+                    df_pregao = df_dia_atual[mascara_pregao]
+
+                    if df_pregao.empty:
+                        continue
+
+                    def time_to_minutes(t):
+                        return t.hour * 60 + t.minute
+
+                    minutos_desejado = time_to_minutes(hora_inicio)
+                    minutos_candles = [time_to_minutes(t) for t in df_pregao.index.time]
+                    diferencas = [abs(m - minutos_desejado) for m in minutos_candles]
+                    melhor_idx = np.argmin(diferencas)
+                    idx_entrada = df_pregao.index[melhor_idx]
+                    preco_entrada = df_pregao.loc[idx_entrada]["open"]
+
+                    idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
+                    if idx_saida not in df.index or idx_saida.date() != idx_entrada.date():
+                        continue
+                    preco_saida = df.loc[idx_saida]["open"]
+
+                    referencia_valor = None
+                    try:
+                        idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
+                        if idx_dia_atual_idx == 0:
+                            continue
+                        dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
+                    except:
+                        continue
+
+                    if referencia == "Fechamento do dia anterior":
+                        try:
+                            referencia_valor = df[df.index.date == dia_anterior]["close"].iloc[-1]
+                        except:
+                            continue
+                    elif referencia == "Mínima do dia anterior":
+                        try:
+                            ref_series = df[df.index.date == dia_anterior]["low"]
+                            if ref_series.empty:
+                                continue
+                            referencia_valor = ref_series.min()
+                        except:
+                            continue
+                    elif referencia == "Abertura do dia atual":
+                        try:
+                            if df_dia_atual["open"].empty:
+                                continue
+                            referencia_valor = df_dia_atual["open"].iloc[0]
+                        except:
+                            continue
+
+                    if referencia_valor is None or referencia_valor <= 0:
+                        continue
+
+                    distorcao_percentual = ((preco_entrada - referencia_valor) / referencia_valor) * 100
+
+                    if distorcao_percentual < -dist_compra:
+                        if tipo_ativo == "acoes":
+                            lucro_reais = (preco_saida - preco_entrada) * qtd
+                        else:
+                            valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
+                            lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
+
+                        todas_operacoes.append({
+                            "Ação": ticker_nome,
+                            "Direção": "Compra",
+                            "Horário": idx_entrada.strftime("%H:%M"),
+                            "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                            "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                            "Preço Entrada": round(preco_entrada, 2),
+                            "Preço Saída": round(preco_saida, 2),
+                            "Lucro (R$)": round(lucro_reais, 2),
+                            "Distorção (%)": f"{distorcao_percentual:.2f}%",
+                            "Quantidade": qtd
+                        })
+
+                    elif distorcao_percentual > dist_venda:
+                        if tipo_ativo == "acoes":
+                            lucro_reais = (preco_entrada - preco_saida) * qtd
+                        else:
+                            valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
+                            lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
+
+                        todas_operacoes.append({
+                            "Ação": ticker_nome,
+                            "Direção": "Venda",
+                            "Horário": idx_entrada.strftime("%H:%M"),
+                            "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
+                            "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
+                            "Preço Entrada": round(preco_entrada, 2),
+                            "Preço Saída": round(preco_saida, 2),
+                            "Lucro (R$)": round(lucro_reais, 2),
+                            "Distorção (%)": f"{distorcao_percentual:.2f}%",
+                            "Quantidade": qtd
+                        })
+
+            except Exception as e:
+                st.write(f"❌ Erro ao processar {file.name}: {e}")
+                continue
+
+    return pd.DataFrame(todas_operacoes) if todas_operacoes else pd.DataFrame()
+
 # Interface do app
 st.title("📊 BacktestPro")
 st.subheader("Análise de distorção de preço")
@@ -179,163 +327,28 @@ if data_min_global and data_max_global:
 
     # Botão para rodar
     if st.button("🚀 Rodar Backtest"):
-        with st.expander("ℹ️ Ver detalhes do processamento", expanded=False):
-            st.write("🔄 Iniciando processamento...")
+        with st.spinner("🔄 Processando backtest... Isso pode levar alguns segundos."):
+            df_ops = processar_backtest(
+                uploaded_files=uploaded_files,
+                tipo_ativo=tipo_ativo,
+                qtd=qtd,
+                candles_pos_entrada=candles_pos_entrada,
+                dist_compra=dist_compra,
+                dist_venda=dist_venda,
+                referencia=referencia,
+                horarios_selecionados=horarios_selecionados,
+                data_inicio=data_inicio,
+                data_fim=data_fim
+            )
 
-            # Armazenar todas as operações
-            todas_operacoes = []
-
-            for horario_str in horarios_selecionados:
-                hora, minuto = map(int, horario_str.split(":"))
-                hora_inicio = time_obj(hora, minuto)
-                st.write(f"⏰ Processando horário: {horario_str}")
-
-                for file in uploaded_files:
-                    try:
-                        ticker_nome = extrair_nome_completo(file.name)
-                        tipo_arquivo = identificar_tipo(ticker_nome)
-
-                        # ✅ FILTRO RÍGIDO POR TIPO DE ATIVO
-                        if tipo_arquivo != tipo_ativo:
-                            continue
-
-                        df = pd.read_excel(file)
-                        df.columns = [str(col).strip().capitalize() for col in df.columns]
-                        df.rename(columns={'Data': 'data', 'Abertura': 'open', 'Máxima': 'high', 'Mínima': 'low', 'Fechamento': 'close'}, inplace=True)
-                        df['data'] = pd.to_datetime(df['data'], dayfirst=True, errors='coerce')
-                        df = df.dropna(subset=['data'])
-                        df['data_limpa'] = df['data'].dt.floor('min')
-                        df = df.set_index('data_limpa').sort_index()
-                        df['data_sozinha'] = df.index.date
-                        df = df[(df['data_sozinha'] >= data_inicio) & (df['data_sozinha'] <= data_fim)]
-
-                        if df.empty:
-                            continue
-
-                        dias_unicos = pd.unique(df['data_sozinha'])
-
-                        for i in range(len(dias_unicos)):
-                            dia_atual = dias_unicos[i]
-                            df_dia_atual = df[df['data_sozinha'] == dia_atual].copy()
-                            mascara_pregao = (df_dia_atual.index.time >= time_obj(9, 0)) & (df_dia_atual.index.time <= time_obj(17, 30))
-                            df_pregao = df_dia_atual[mascara_pregao]
-
-                            if df_pregao.empty:
-                                continue
-
-                            # Encontrar o candle mais próximo do horário
-                            def time_to_minutes(t):
-                                return t.hour * 60 + t.minute
-
-                            minutos_desejado = time_to_minutes(hora_inicio)
-                            minutos_candles = [time_to_minutes(t) for t in df_pregao.index.time]
-                            diferencas = [abs(m - minutos_desejado) for m in minutos_candles]
-                            melhor_idx = np.argmin(diferencas)
-                            idx_entrada = df_pregao.index[melhor_idx]
-                            preco_entrada = df_pregao.loc[idx_entrada]["open"]
-
-                            # Saída
-                            idx_saida = idx_entrada + timedelta(minutes=5 * int(candles_pos_entrada))
-                            if idx_saida not in df.index or idx_saida.date() != idx_entrada.date():
-                                continue
-                            preco_saida = df.loc[idx_saida]["open"]
-
-                            # Calcular referência com base na seleção
-                            referencia_valor = None
-                            try:
-                                idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
-                                if idx_dia_atual_idx == 0:
-                                    continue  # Pula o primeiro dia
-                                dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                            except:
-                                continue
-
-                            # ✅ DEFINIR A REFERÊNCIA CORRETAMENTE
-                            if referencia == "Fechamento do dia anterior":
-                                try:
-                                    referencia_valor = df[df.index.date == dia_anterior]["close"].iloc[-1]
-                                except:
-                                    continue
-
-                            elif referencia == "Mínima do dia anterior":
-                                try:
-                                    ref_series = df[df.index.date == dia_anterior]["low"]
-                                    if ref_series.empty:
-                                        continue
-                                    referencia_valor = ref_series.min()
-                                except:
-                                    continue
-
-                            elif referencia == "Abertura do dia atual":
-                                try:
-                                    if df_dia_atual["open"].empty:
-                                        continue
-                                    referencia_valor = df_dia_atual["open"].iloc[0]
-                                except:
-                                    continue
-
-                            # ✅ VALIDAR REFERÊNCIA
-                            if referencia_valor is None or referencia_valor <= 0:
-                                continue
-
-                            # ✅ CALCULAR DISTORÇÃO
-                            distorcao_percentual = ((preco_entrada - referencia_valor) / referencia_valor) * 100
-
-                            # Verificar distorção mínima
-                            if distorcao_percentual < -dist_compra:
-                                if tipo_ativo == "acoes":
-                                    lucro_reais = (preco_saida - preco_entrada) * qtd
-                                else:
-                                    valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
-                                    lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
-
-                                todas_operacoes.append({
-                                    "Ação": ticker_nome,
-                                    "Direção": "Compra",
-                                    "Horário": idx_entrada.strftime("%H:%M"),
-                                    "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
-                                    "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
-                                    "Preço Entrada": round(preco_entrada, 2),
-                                    "Preço Saída": round(preco_saida, 2),
-                                    "Lucro (R$)": round(lucro_reais, 2),
-                                    "Distorção (%)": f"{distorcao_percentual:.2f}%",
-                                    "Quantidade": qtd
-                                })
-
-                            elif distorcao_percentual > dist_venda:
-                                if tipo_ativo == "acoes":
-                                    lucro_reais = (preco_entrada - preco_saida) * qtd
-                                else:
-                                    valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
-                                    lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
-
-                                todas_operacoes.append({
-                                    "Ação": ticker_nome,
-                                    "Direção": "Venda",
-                                    "Horário": idx_entrada.strftime("%H:%M"),
-                                    "Data Entrada": idx_entrada.strftime("%d/%m/%Y %H:%M"),
-                                    "Data Saída": idx_saida.strftime("%d/%m/%Y %H:%M"),
-                                    "Preço Entrada": round(preco_entrada, 2),
-                                    "Preço Saída": round(preco_saida, 2),
-                                    "Lucro (R$)": round(lucro_reais, 2),
-                                    "Distorção (%)": f"{distorcao_percentual:.2f}%",
-                                    "Quantidade": qtd
-                                })
-
-                    except Exception as e:
-                        st.write(f"❌ Erro ao processar {file.name}: {e}")
-                        continue
-
-            # ✅ Salvar para uso posterior
-            if todas_operacoes:
-                df_ops = pd.DataFrame(todas_operacoes)
+            if not df_ops.empty:
                 st.session_state.todas_operacoes = df_ops
-                st.write(f"✅ Backtest concluído: {len(df_ops)} operações registradas.")
+                st.success(f"✅ Backtest concluído: {len(df_ops)} operações registradas.")
             else:
                 st.warning("❌ Nenhuma operação foi registrada.")
                 st.session_state.todas_operacoes = pd.DataFrame()
 
-        # ✅ Mostrar o ranking na tela principal (fora do expander)
+        # Mostrar o ranking na tela principal
         if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
 
@@ -379,7 +392,7 @@ if data_min_global and data_max_global:
                 st.header("📉 Ranking de Vendas")
                 st.dataframe(resumo_vendas, use_container_width=True)
 
-    # 6. Detalhamento por ação (separado em compras e vendas)
+    # 6. Detalhamento por ação
     st.header("🔍 Detalhamento por Ação")
     nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
 
