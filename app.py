@@ -3,7 +3,11 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time as time_obj, timedelta
 
-# Função corrigida para identificar o tipo de ativo
+# Função para extrair nome completo do arquivo (sem .xlsx)
+def extrair_nome_completo(file_name):
+    return file_name.split(".")[0]  # Ex: 5-MIN_PETR4.xlsx → 5-MIN_PETR4
+
+# Função para identificar o tipo de ativo
 def identificar_tipo(ticker):
     ticker = ticker.upper().strip()
     if '.' in ticker:
@@ -11,17 +15,17 @@ def identificar_tipo(ticker):
     for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
         if ticker.startswith(prefix):
             ticker = ticker[len(prefix):]
-    
+
     if 'WIN' in ticker or 'INDICE' in ticker:
         return 'mini_indice'
     if 'WDO' in ticker or 'DOLAR' in ticker or 'DOL' in ticker:
         return 'mini_dolar'
-    
+
     acoes = ['PETR', 'VALE', 'ITUB', 'BBDC', 'BEEF', 'ABEV', 'ITSA', 'JBSS', 'RADL', 'CIEL', 'GOLL', 'AZUL', 'BBAS', 'SANB']
     for acao in acoes:
         if acao in ticker:
             return 'acoes'
-    
+
     return 'mini_dolar'
 
 # Interface do app
@@ -94,6 +98,16 @@ if data_min_global and data_max_global:
     candles_pos_entrada = st.number_input("Número de Candles após entrada", min_value=1, value=3)
     dist_compra = st.number_input("Distorção mínima COMPRA (%)", value=0.3)
     dist_venda = st.number_input("Distorção mínima VENDA (%)", value=0.3)
+
+    # Nova opção: Referência para cálculo da distorção
+    referencia = st.selectbox(
+        "Referência para cálculo da distorção",
+        [
+            "Fechamento do dia anterior",
+            "Mínima do dia anterior",
+            "Abertura do dia atual"
+        ]
+    )
     
     # Definir horários disponíveis por tipo de ativo
     if tipo_ativo == "acoes":
@@ -113,7 +127,7 @@ if data_min_global and data_max_global:
             "17:00"
         ]
         horario_inicial, horario_final = "10:00", "17:00"
-    else:  # mini_indice ou mini_dolar
+    else:
         todos_horarios = [
             "09:00", "09:05", "09:10", "09:15", "09:20", "09:25", "09:30",
             "09:35", "09:40", "09:45", "09:50", "09:55", "10:00", "10:05",
@@ -168,28 +182,20 @@ if data_min_global and data_max_global:
         with st.expander("ℹ️ Ver detalhes do processamento", expanded=False):
             st.write("🔄 Iniciando processamento...")
 
-            # Armazenar resultados por horário
-            resultados_por_horario = []
-            todas_operacoes = []  # Para detalhamento por ação
+            # Armazenar todas as operações
+            todas_operacoes = []
 
-            total_dias_analisados = 0
-            dias_com_sinal = 0
-
-            # Processar horário por horário
             for horario_str in horarios_selecionados:
                 hora, minuto = map(int, horario_str.split(":"))
                 hora_inicio = time_obj(hora, minuto)
                 st.write(f"⏰ Processando horário: {horario_str}")
 
-                # ✅ Listas limpas para CADA horário
-                operacoes_compra = []
-                operacoes_venda = []
-
                 for file in uploaded_files:
                     try:
-                        ticker_nome = file.name.split(".")[0]
+                        ticker_nome = extrair_nome_completo(file.name)
                         tipo_arquivo = identificar_tipo(ticker_nome)
 
+                        # ✅ FILTRO RÍGIDO POR TIPO DE ATIVO
                         if tipo_arquivo != tipo_ativo:
                             continue
 
@@ -217,7 +223,7 @@ if data_min_global and data_max_global:
                             if df_pregao.empty:
                                 continue
 
-                            # Encontrar o candle mais próximo do horário selecionado
+                            # Encontrar o candle mais próximo do horário
                             def time_to_minutes(t):
                                 return t.hour * 60 + t.minute
 
@@ -234,38 +240,55 @@ if data_min_global and data_max_global:
                                 continue
                             preco_saida = df.loc[idx_saida]["open"]
 
-                            # Fechamento do dia anterior
+                            # Calcular referência com base na seleção
+                            referencia_valor = None
                             try:
                                 idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
                                 if idx_dia_atual_idx == 0:
-                                    fechamento_anterior = 0
-                                else:
-                                    dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                                    fechamento_anterior = df[df.index.date == dia_anterior]["close"].iloc[-1]
+                                    continue  # Pula o primeiro dia
+                                dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
                             except:
-                                fechamento_anterior = 0
+                                continue
 
-                            distorcao_percentual = 0
-                            if fechamento_anterior != 0:
-                                distorcao = preco_entrada - fechamento_anterior
-                                distorcao_percentual = (distorcao / fechamento_anterior) * 100
+                            # ✅ DEFINIR A REFERÊNCIA CORRETAMENTE
+                            if referencia == "Fechamento do dia anterior":
+                                try:
+                                    referencia_valor = df[df.index.date == dia_anterior]["close"].iloc[-1]
+                                except:
+                                    continue
 
-                            # Valor por ponto
-                            if tipo_ativo == "mini_indice":
-                                valor_ponto = 0.20
-                            elif tipo_ativo == "mini_dolar":
-                                valor_ponto = 10.00
-                            else:
-                                valor_ponto = 1.00
+                            elif referencia == "Mínima do dia anterior":
+                                try:
+                                    ref_series = df[df.index.date == dia_anterior]["low"]
+                                    if ref_series.empty:
+                                        continue
+                                    referencia_valor = ref_series.min()
+                                except:
+                                    continue
 
-                            # Compra
+                            elif referencia == "Abertura do dia atual":
+                                try:
+                                    if df_dia_atual["open"].empty:
+                                        continue
+                                    referencia_valor = df_dia_atual["open"].iloc[0]
+                                except:
+                                    continue
+
+                            # ✅ VALIDAR REFERÊNCIA
+                            if referencia_valor is None or referencia_valor <= 0:
+                                continue
+
+                            # ✅ CALCULAR DISTORÇÃO
+                            distorcao_percentual = ((preco_entrada - referencia_valor) / referencia_valor) * 100
+
+                            # Verificar distorção mínima
                             if distorcao_percentual < -dist_compra:
                                 if tipo_ativo == "acoes":
                                     lucro_reais = (preco_saida - preco_entrada) * qtd
                                 else:
+                                    valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
                                     lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
 
-                                operacoes_compra.append({"lucro": lucro_reais})
                                 todas_operacoes.append({
                                     "Ação": ticker_nome,
                                     "Direção": "Compra",
@@ -279,14 +302,13 @@ if data_min_global and data_max_global:
                                     "Quantidade": qtd
                                 })
 
-                            # Venda
                             elif distorcao_percentual > dist_venda:
                                 if tipo_ativo == "acoes":
                                     lucro_reais = (preco_entrada - preco_saida) * qtd
                                 else:
+                                    valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
                                     lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
 
-                                operacoes_venda.append({"lucro": lucro_reais})
                                 todas_operacoes.append({
                                     "Ação": ticker_nome,
                                     "Direção": "Venda",
@@ -304,106 +326,94 @@ if data_min_global and data_max_global:
                         st.write(f"❌ Erro ao processar {file.name}: {e}")
                         continue
 
-                # ✅ Calcular resultados para este horário
-                if operacoes_compra:
-                    total = len(operacoes_compra)
-                    acertos = len([op for op in operacoes_compra if op["lucro"] > 0])
-                    lucro_total = sum(op["lucro"] for op in operacoes_compra)
-                    resultados_por_horario.append({
-                        "Horário": horario_str,
-                        "Total Eventos": total,
-                        "Acertos": acertos,
-                        "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                        "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
-                        "Direção": "Compra"
-                    })
-
-                if operacoes_venda:
-                    total = len(operacoes_venda)
-                    acertos = len([op for op in operacoes_venda if op["lucro"] > 0])
-                    lucro_total = sum(op["lucro"] for op in operacoes_venda)
-                    resultados_por_horario.append({
-                        "Horário": horario_str,
-                        "Total Eventos": total,
-                        "Acertos": acertos,
-                        "Taxa de Acerto": f"{acertos/total:.2%}" if total > 0 else "0.00%",
-                        "Lucro Total (R$)": f"R$ {lucro_total:.2f}",
-                        "Direção": "Venda"
-                    })
-
-            # ✅ SALVAR NO SESSION STATE (APENAS UMA VEZ)
-            if resultados_por_horario:
-                st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
+            # ✅ Salvar para uso posterior
             if todas_operacoes:
-                st.session_state.todas_operacoes = pd.DataFrame(todas_operacoes)
-                st.write(f"✅ Backtest concluído: {len(todas_operacoes)} operações registradas.")
+                df_ops = pd.DataFrame(todas_operacoes)
+                st.session_state.todas_operacoes = df_ops
+                st.write(f"✅ Backtest concluído: {len(df_ops)} operações registradas.")
             else:
-                st.write("❌ Nenhuma operação foi registrada.")
+                st.warning("❌ Nenhuma operação foi registrada.")
                 st.session_state.todas_operacoes = pd.DataFrame()
 
-        # ✅ Mostrar rankings na tela principal
-        if 'resultados_por_horario' in st.session_state:
-            df_rank = st.session_state.resultados_por_horario
-
-            # 🏆 Ranking de Compras
-            df_compras = df_rank[df_rank['Direção'] == 'Compra']
-            if not df_compras.empty:
-                st.header("🏆 Ranking de Compras")
-                df_compras['Lucro Num'] = (
-                    df_compras['Lucro Total (R$)']
-                    .str.replace('R\$', '', regex=True)
-                    .str.strip()
-                    .str.replace(',', '.')
-                    .str.replace(' ', '')
-                    .astype(float)
-                )
-                df_compras = df_compras.sort_values('Lucro Num', ascending=False)
-                st.dataframe(df_compras.drop('Lucro Num', axis=1), use_container_width=True)
-
-            # 📉 Ranking de Vendas
-            df_vendas = df_rank[df_rank['Direção'] == 'Venda']
-            if not df_vendas.empty:
-                st.header("📉 Ranking de Vendas")
-                df_vendas['Lucro Num'] = (
-                    df_vendas['Lucro Total (R$)']
-                    .str.replace('R\$', '', regex=True)
-                    .str.strip()
-                    .str.replace(',', '.')
-                    .str.replace(' ', '')
-                    .astype(float)
-                )
-                df_vendas = df_vendas.sort_values('Lucro Num', ascending=False)
-                st.dataframe(df_vendas.drop('Lucro Num', axis=1), use_container_width=True)
-
-    # 6. Detalhamento por ação
-    st.header("🔍 Detalhamento por Ação")
-    nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
-    if st.button("📥 Mostrar detalhamento") and nome_acao:
+        # ✅ Mostrar o ranking na tela principal (fora do expander)
         if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
-            mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
-            df_filtrado = df_ops[mask]
 
-            if not df_filtrado.empty:
-                # Separar em compras e vendas
-                df_compras = df_filtrado[df_filtrado['Direção'] == 'Compra']
-                df_vendas = df_filtrado[df_filtrado['Direção'] == 'Venda']
+            # 🏆 Ranking de Compras
+            df_compras = df_ops[df_ops['Direção'] == 'Compra']
+            if not df_compras.empty:
+                resumo_compras = df_compras.groupby(['Ação', 'Horário']).agg(
+                    Total_Eventos=('Lucro (R$)', 'count'),
+                    Acertos=('Lucro (R$)', lambda x: (x > 0).sum()),
+                    Lucro_Total=('Lucro (R$)', 'sum')
+                ).reset_index()
 
-                if not df_compras.empty:
-                    st.subheader("🛒 Detalhamento de Compras")
-                    st.dataframe(df_compras, use_container_width=True)
-                else:
-                    st.info(f"ℹ️ Nenhuma operação de compra encontrada para {nome_acao}.")
+                resumo_compras = resumo_compras.sort_values('Lucro_Total', ascending=False).copy()
+                resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total_Eventos']).map("{:.2%}".format)
+                resumo_compras['Lucro Total (R$)'] = "R$ " + resumo_compras['Lucro_Total'].map("{:.2f}".format)
 
-                if not df_vendas.empty:
-                    st.subheader("🔻 Detalhamento de Vendas")
-                    st.dataframe(df_vendas, use_container_width=True)
-                else:
-                    st.info(f"ℹ️ Nenhuma operação de venda encontrada para {nome_acao}.")
+                resumo_compras = resumo_compras[[
+                    'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
+                ]]
+
+                st.header("🏆 Ranking de Compras")
+                st.dataframe(resumo_compras, use_container_width=True)
+
+            # 📉 Ranking de Vendas
+            df_vendas = df_ops[df_ops['Direção'] == 'Venda']
+            if not df_vendas.empty:
+                resumo_vendas = df_vendas.groupby(['Ação', 'Horário']).agg(
+                    Total_Eventos=('Lucro (R$)', 'count'),
+                    Acertos=('Lucro (R$)', lambda x: (x > 0).sum()),
+                    Lucro_Total=('Lucro (R$)', 'sum')
+                ).reset_index()
+
+                resumo_vendas = resumo_vendas.sort_values('Lucro_Total', ascending=False).copy()
+                resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total_Eventos']).map("{:.2%}".format)
+                resumo_vendas['Lucro Total (R$)'] = "R$ " + resumo_vendas['Lucro_Total'].map("{:.2f}".format)
+
+                resumo_vendas = resumo_vendas[[
+                    'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
+                ]]
+
+                st.header("📉 Ranking de Vendas")
+                st.dataframe(resumo_vendas, use_container_width=True)
+
+    # 6. Detalhamento por ação (separado em compras e vendas)
+    st.header("🔍 Detalhamento por Ação")
+    nome_acao = st.text_input("Digite o nome da ação (ex: ITUB4, WINZ25, DOLZ25)")
+
+    if st.button("📥 Mostrar detalhamento") and nome_acao and "todas_operacoes" in st.session_state:
+        df_ops = st.session_state.todas_operacoes
+        mask = df_ops['Ação'].str.contains(nome_acao, case=False, na=False)
+        df_filtrado = df_ops[mask]
+
+        if not df_filtrado.empty:
+            # Separar em compras e vendas
+            df_compras = df_filtrado[df_filtrado['Direção'] == 'Compra']
+            df_vendas = df_filtrado[df_filtrado['Direção'] == 'Venda']
+
+            # Reordenar colunas
+            colunas = [
+                'Ação', 'Horário', 'Data Entrada', 'Data Saída',
+                'Preço Entrada', 'Preço Saída', 'Lucro (R$)', 'Distorção (%)', 'Quantidade'
+            ]
+
+            if not df_compras.empty:
+                st.subheader("🟢 Detalhamento de Compras")
+                st.dataframe(df_compras[colunas], use_container_width=True)
             else:
-                st.info(f"ℹ️ Nenhuma operação encontrada para {nome_acao}.")
+                st.info(f"ℹ️ Nenhuma operação de compra encontrada para **{nome_acao}**.")
+
+            if not df_vendas.empty:
+                st.subheader("🔴 Detalhamento de Vendas")
+                st.dataframe(df_vendas[colunas], use_container_width=True)
+            else:
+                st.info(f"ℹ️ Nenhuma operação de venda encontrada para **{nome_acao}**.")
         else:
-            st.warning("⚠️ Nenhum backtest foi rodado ainda ou nenhuma operação foi registrada.")
+            st.info(f"ℹ️ Nenhuma operação encontrada para **{nome_acao}**.")
+    elif "todas_operacoes" not in st.session_state:
+        st.warning("⚠️ Rode o backtest primeiro.")
 
 else:
     st.info("ℹ️ Aguardando upload de arquivos Excel.")
