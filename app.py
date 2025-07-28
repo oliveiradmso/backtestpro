@@ -24,6 +24,20 @@ def identificar_tipo(ticker):
     
     return 'mini_dolar'
 
+# Nova função: extrair nome limpo do ativo
+def extrair_nome_ativo(file_name):
+    base = file_name.split(".")[0]  # Remove .xlsx
+    for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
+        if base.startswith(prefix):
+            base = base[len(prefix):]
+    # Retorna apenas o ticker principal (ex: WINZ25, ITUB4)
+    if 'WIN' in base or 'WDO' in base:
+        return base[:6]  # WINZ25, WDOZ25
+    elif len(base) >= 4 and base[0:4].isalpha():
+        return base[0:4] if base[4:].isdigit() else base[0:5]  # ITUB4, PETR4
+    else:
+        return base
+
 # Interface do app
 st.title("📊 BacktestPro")
 st.subheader("Análise de distorção de preço")
@@ -195,8 +209,8 @@ if data_min_global and data_max_global:
 
                 for file in uploaded_files:
                     try:
-                        ticker_nome = file.name.split(".")[0]
-                        tipo_arquivo = identificar_tipo(ticker_nome)
+                        ticker_nome = extrair_nome_ativo(file.name)  # Nome limpo
+                        tipo_arquivo = identificar_tipo(file.name)
 
                         if tipo_arquivo != tipo_ativo:
                             continue
@@ -375,7 +389,7 @@ if data_min_global and data_max_global:
         # ✅ Mostrar rankings na tela principal
         if 'resultados_por_horario' in st.session_state:
             # ✅ Filtro por ativo
-            ativos_disponiveis = sorted(list(set([file.name.split(".")[0] for file in uploaded_files])))
+            ativos_disponiveis = sorted(list(set([extrair_nome_ativo(file.name) for file in uploaded_files])))
             ativo_selecionado = st.selectbox(
                 "🎯 Selecione o ativo para exibir no ranking",
                 ["TODOS"] + ativos_disponiveis
@@ -384,14 +398,13 @@ if data_min_global and data_max_global:
             df_ops = st.session_state.todas_operacoes.copy() if "todas_operacoes" in st.session_state else pd.DataFrame()
 
             if ativo_selecionado != "TODOS":
-                ticker_base = ativo_selecionado.split(".")[0]
                 if df_ops.empty:
                     st.warning("⚠️ Nenhuma operação registrada.")
                     df_rank = pd.DataFrame()
                 else:
-                    ops_filtradas = df_ops[df_ops['Ação'] == ticker_base]
+                    ops_filtradas = df_ops[df_ops['Ação'] == ativo_selecionado]
                     if ops_filtradas.empty:
-                        st.warning(f"⚠️ Nenhuma operação encontrada para **{ticker_base}**.")
+                        st.warning(f"⚠️ Nenhuma operação encontrada para **{ativo_selecionado}**.")
                         df_rank = pd.DataFrame()
                     else:
                         resultados_filtrados = []
