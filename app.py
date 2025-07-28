@@ -240,21 +240,46 @@ if data_min_global and data_max_global:
                                 continue
                             preco_saida = df.loc[idx_saida]["open"]
 
-                            # Calcular referência
+                            # Calcular referência com base na seleção
+                            referencia_valor = None
                             try:
                                 idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
                                 if idx_dia_atual_idx == 0:
-                                    continue
+                                    continue  # Pula o primeiro dia
                                 dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                                referencia_valor = df[df.index.date == dia_anterior]["close"].iloc[-1]
                             except:
                                 continue
 
-                            # Calcular distorção
-                            distorcao_percentual = 0
-                            if referencia_valor > 0:
-                                distorcao = preco_entrada - referencia_valor
-                                distorcao_percentual = (distorcao / referencia_valor) * 100
+                            # ✅ DEFINIR A REFERÊNCIA CORRETAMENTE
+                            if referencia == "Fechamento do dia anterior":
+                                try:
+                                    referencia_valor = df[df.index.date == dia_anterior]["close"].iloc[-1]
+                                except:
+                                    continue
+
+                            elif referencia == "Mínima do dia anterior":
+                                try:
+                                    ref_series = df[df.index.date == dia_anterior]["low"]
+                                    if ref_series.empty:
+                                        continue
+                                    referencia_valor = ref_series.min()
+                                except:
+                                    continue
+
+                            elif referencia == "Abertura do dia atual":
+                                try:
+                                    if df_dia_atual["open"].empty:
+                                        continue
+                                    referencia_valor = df_dia_atual["open"].iloc[0]
+                                except:
+                                    continue
+
+                            # ✅ VALIDAR REFERÊNCIA
+                            if referencia_valor is None or referencia_valor <= 0:
+                                continue
+
+                            # ✅ CALCULAR DISTORÇÃO
+                            distorcao_percentual = ((preco_entrada - referencia_valor) / referencia_valor) * 100
 
                             # Verificar distorção mínima
                             if distorcao_percentual < -dist_compra:
