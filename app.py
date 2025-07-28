@@ -5,7 +5,7 @@ from datetime import datetime, time as time_obj, timedelta
 
 # Função para extrair nome limpo do ativo (sem prefixo nem .xlsx)
 def extrair_nome_limpo(file_name):
-    base = file_name.split(".")[0]
+    base = file_name.split(".")[0]  # Remove .xlsx
     for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
         if base.startswith(prefix):
             base = base[len(prefix):]
@@ -165,7 +165,7 @@ if data_min_global and data_max_global:
         with st.expander("ℹ️ Ver detalhes do processamento", expanded=False):
             st.write("🔄 Iniciando processamento...")
 
-            # Armazenar resultados por ação + horário
+            # Armazenar todas as operações
             todas_operacoes = []
 
             for horario_str in horarios_selecionados:
@@ -217,7 +217,7 @@ if data_min_global and data_max_global:
                                 continue
                             preco_saida = df.loc[idx_saida]["open"]
 
-                            # Calcular referência (exemplo: fechamento do dia anterior)
+                            # Calcular referência
                             try:
                                 idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
                                 if idx_dia_atual_idx == 0:
@@ -235,23 +235,33 @@ if data_min_global and data_max_global:
 
                             # Verificar distorção mínima
                             if distorcao_percentual < -dist_compra:
-                                lucro_reais = (preco_saida - preco_entrada) * qtd
+                                if tipo_ativo == "acoes":
+                                    lucro_reais = (preco_saida - preco_entrada) * qtd
+                                else:
+                                    valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
+                                    lucro_reais = (preco_saida - preco_entrada) * valor_ponto * qtd
+
                                 todas_operacoes.append({
                                     "Ação": ticker_nome,
                                     "Horário": horario_str,
                                     "Direção": "Compra",
                                     "Distorção (%)": f"{distorcao_percentual:.2f}%",
-                                    "Lucro (R$)": round(lucro_reais, 2)
+                                    "Lucro (R$)": lucro_reais
                                 })
 
                             elif distorcao_percentual > dist_venda:
-                                lucro_reais = (preco_entrada - preco_saida) * qtd
+                                if tipo_ativo == "acoes":
+                                    lucro_reais = (preco_entrada - preco_saida) * qtd
+                                else:
+                                    valor_ponto = 0.20 if tipo_ativo == "mini_indice" else 10.00
+                                    lucro_reais = (preco_entrada - preco_saida) * valor_ponto * qtd
+
                                 todas_operacoes.append({
                                     "Ação": ticker_nome,
                                     "Horário": horario_str,
                                     "Direção": "Venda",
                                     "Distorção (%)": f"{distorcao_percentual:.2f}%",
-                                    "Lucro (R$)": round(lucro_reais, 2)
+                                    "Lucro (R$)": lucro_reais
                                 })
 
                     except Exception as e:
@@ -271,11 +281,15 @@ if data_min_global and data_max_global:
                         Lucro_Total=('Lucro (R$)', 'sum')
                     ).reset_index()
 
+                    # ✅ ORDENAR ANTES DE FORMATAR
+                    resumo_compras = resumo_compras.sort_values('Lucro_Total', ascending=False).copy()
+
                     resumo_compras['Taxa de Acerto'] = (resumo_compras['Acertos'] / resumo_compras['Total_Eventos']).map("{:.2%}".format)
                     resumo_compras['Lucro Total (R$)'] = "R$ " + resumo_compras['Lucro_Total'].map("{:.2f}".format)
-                    resumo_compras = resumo_compras.rename(columns={'Ação': 'Ação', 'Horário': 'Horário'})
-                    resumo_compras = resumo_compras[['Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)']]
-                    resumo_compras = resumo_compras.sort_values('Lucro_Total', ascending=False)
+
+                    resumo_compras = resumo_compras[[
+                        'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
+                    ]]
 
                     st.header("🏆 Ranking de Compras")
                     st.dataframe(resumo_compras, use_container_width=True)
@@ -289,11 +303,15 @@ if data_min_global and data_max_global:
                         Lucro_Total=('Lucro (R$)', 'sum')
                     ).reset_index()
 
+                    # ✅ ORDENAR ANTES DE FORMATAR
+                    resumo_vendas = resumo_vendas.sort_values('Lucro_Total', ascending=False).copy()
+
                     resumo_vendas['Taxa de Acerto'] = (resumo_vendas['Acertos'] / resumo_vendas['Total_Eventos']).map("{:.2%}".format)
                     resumo_vendas['Lucro Total (R$)'] = "R$ " + resumo_vendas['Lucro_Total'].map("{:.2f}".format)
-                    resumo_vendas = resumo_vendas.rename(columns={'Ação': 'Ação', 'Horário': 'Horário'})
-                    resumo_vendas = resumo_vendas[['Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)']]
-                    resumo_vendas = resumo_vendas.sort_values('Lucro_Total', ascending=False)
+
+                    resumo_vendas = resumo_vendas[[
+                        'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
+                    ]]
 
                     st.header("📉 Ranking de Vendas")
                     st.dataframe(resumo_vendas, use_container_width=True)
