@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, time as time_obj, timedelta
 
-# Função para extrair o nome limpo do ativo (sem prefixos)
+# Função para extrair o nome limpo do ativo
 def extrair_nome_limpo(file_name):
     base = file_name.split(".")[0]  # Remove .xlsx
     for prefix in ['5-MIN_', 'MINI_', 'MIN_']:
@@ -192,8 +192,8 @@ if data_min_global and data_max_global:
 
                 for file in uploaded_files:
                     try:
-                        # ✅ EXTRAÇÃO PADRONIZADA E IMUTÁVEL DO NOME
-                        nome_original = file.name.split(".")[0]
+                        # ✅ EXTRAÇÃO PADRONIZADA
+                        nome_original = file.name
                         ticker_nome = extrair_nome_limpo(file.name)
                         tipo_arquivo = identificar_tipo(ticker_nome)
 
@@ -365,15 +365,19 @@ if data_min_global and data_max_global:
             if resultados_por_horario:
                 st.session_state.resultados_por_horario = pd.DataFrame(resultados_por_horario)
             if todas_operacoes:
-                st.session_state.todas_operacoes = pd.DataFrame(todas_operacoes)
-                st.write(f"✅ Backtest concluído: {len(todas_operacoes)} operações registradas.")
+                df_todas = pd.DataFrame(todas_operacoes)
+                st.session_state.todas_operacoes = df_todas
+                st.write(f"✅ Backtest concluído: {len(df_todas)} operações registradas.")
+                # ✅ MOSTRAR OS NOMES DOS ATIVOS SALVOS
+                st.write("🔍 Nomes exatos salvos em 'Ação':")
+                st.write(df_todas['Ação'].unique().tolist())
             else:
                 st.write("❌ Nenhuma operação foi registrada.")
                 st.session_state.todas_operacoes = pd.DataFrame()
 
         # ✅ Mostrar rankings na tela principal
         if 'resultados_por_horario' in st.session_state:
-            # ✅ Filtro por ativo: usar os NOMES LIMPOS que estão em todas_operacoes
+            # ✅ Filtro por ativo: usar os NOMES EXATOS que estão em todas_operacoes
             if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
                 ativos_disponiveis = sorted(st.session_state.todas_operacoes['Ação'].unique())
             else:
