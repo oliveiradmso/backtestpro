@@ -326,7 +326,7 @@ if data_min_global and data_max_global:
             if invalidos:
                 st.error(f"❌ Horários inválidos selecionados: {', '.join(invalidos)}. Para **{tipo_ativo}**, o intervalo válido é de **{horario_inicial} às {horario_final}**.")
             else:
-                st.session_state.configuracoes = {
+                st.session_state.configuracoes_salvas = {
                     "tipo_ativo": tipo_ativo,
                     "qtd": qtd,
                     "candles_pos_entrada": candles_pos_entrada,
@@ -340,9 +340,9 @@ if data_min_global and data_max_global:
             st.warning(f"⚠️ Selecione pelo menos um horário entre **{horario_inicial} e {horario_final}**.")
 
     # Botão para rodar o backtest (só aparece se as configurações foram salvas)
-    if "configuracoes" in st.session_state:
+    if "configuracoes_salvas" in st.session_state:
         if st.button("🚀 Rodar Backtest"):
-            cfg = st.session_state.configuracoes
+            cfg = st.session_state.configuracoes_salvas
 
             with st.spinner("🔄 Processando backtest... Isso pode levar alguns segundos."):
                 df_ops = processar_backtest(
