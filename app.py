@@ -71,8 +71,11 @@ def processar_backtest(
 
                 dias_unicos = pd.unique(df['data_sozinha'])
 
-                for i in range(len(dias_unicos)):
+                # Garante que haja dia anterior para referência
+                for i in range(1, len(dias_unicos)):
                     dia_atual = dias_unicos[i]
+                    dia_anterior = dias_unicos[i - 1]
+
                     df_dia_atual = df[df['data_sozinha'] == dia_atual].copy()
                     mascara_pregao = (df_dia_atual.index.time >= time_obj(9, 0)) & (df_dia_atual.index.time <= time_obj(17, 30))
                     df_pregao = df_dia_atual[mascara_pregao]
@@ -96,32 +99,27 @@ def processar_backtest(
                     preco_saida = df.loc[idx_saida]["open"]
 
                     referencia_valor = None
-                    try:
-                        idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
-                        if idx_dia_atual_idx == 0:
-                            continue
-                        dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                    except:
-                        continue
 
                     if referencia == "Fechamento do dia anterior":
                         try:
-                            referencia_valor = df[df.index.date == dia_anterior]["close"].iloc[-1]
+                            serie_anterior = df[df.index.date == dia_anterior]
+                            if not serie_anterior.empty:
+                                referencia_valor = serie_anterior["close"].iloc[-1]
                         except:
                             continue
                     elif referencia == "Mínima do dia anterior":
                         try:
-                            ref_series = df[df.index.date == dia_anterior]["low"]
-                            if ref_series.empty:
-                                continue
-                            referencia_valor = ref_series.min()
+                            serie_anterior = df[df.index.date == dia_anterior]
+                            if not serie_anterior.empty:
+                                minima = serie_anterior["low"].min()
+                                if not pd.isna(minima):
+                                    referencia_valor = minima
                         except:
                             continue
                     elif referencia == "Abertura do dia atual":
                         try:
-                            if df_dia_atual["open"].empty:
-                                continue
-                            referencia_valor = df_dia_atual["open"].iloc[0]
+                            if not df_dia_atual["open"].empty:
+                                referencia_valor = df_dia_atual["open"].iloc[0]
                         except:
                             continue
 
