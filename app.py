@@ -279,7 +279,7 @@ if data_min_global and data_max_global:
                 "17:35", "17:40", "17:45", "17:50", "17:55", "18:00", "18:05",
                 "18:10", "18:15", "18:20", "18:25", "18:30",
             ]
-            horario_inicial, horario_final = "10:00", "18:30"
+            horario_inicial, horario_final = "10:00", "17:00"
         else:
             todos_horarios = [
                 "09:00", "09:05", "09:10", "09:15", "09:20", "09:25", "09:30",
