@@ -5,7 +5,7 @@ from datetime import datetime, time as time_obj, timedelta
 
 # Função para extrair nome completo do arquivo (sem .xlsx)
 def extrair_nome_completo(file_name):
-    return file_name.split(".")[0]
+    return file_name.split(".")[0]  # Ex: 5-MIN_PETR4.xlsx → 5-MIN_PETR4
 
 # Função para identificar o tipo de ativo
 def identificar_tipo(ticker):
