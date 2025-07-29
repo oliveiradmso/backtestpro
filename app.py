@@ -275,9 +275,11 @@ if data_min_global and data_max_global:
                 "15:15", "15:20", "15:25", "15:30", "15:35", "15:40", "15:45",
                 "15:50", "15:55", "16:00", "16:05", "16:10", "16:15", "16:20",
                 "16:25", "16:30", "16:35", "16:40", "16:45", "16:50", "16:55",
-                "17:00"
+                "17:00", "17:05", "17:10", "17:15", "17:20", "17:25", "17:30",
+                "17:35", "17:40", "17:45", "17:50", "17:55", "18:00", "18:05",
+                "18:10", "18:15", "18:20", "18:25", "18:30",
             ]
-            horario_inicial, horario_final = "10:00", "17:00"
+            horario_inicial, horario_final = "10:00", "18:30"
         else:
             todos_horarios = [
                 "09:00", "09:05", "09:10", "09:15", "09:20", "09:25", "09:30",
@@ -369,7 +371,7 @@ if data_min_global and data_max_global:
         if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
 
-            # 🏆 Ranking de Compras
+            # 🏆 Mercado Caiu - Ranking de Compras
             df_compras = df_ops[df_ops['Direção'] == 'Compra']
             if not df_compras.empty:
                 resumo_compras = df_compras.groupby(['Ação', 'Horário']).agg(
@@ -389,7 +391,7 @@ if data_min_global and data_max_global:
                 st.header("🏆 Ranking de Compras")
                 st.dataframe(resumo_compras, use_container_width=True)
 
-            # 📉 Ranking de Vendas
+            # 📉 Mercado Subiu - Ranking de Vendas
             df_vendas = df_ops[df_ops['Direção'] == 'Venda']
             if not df_vendas.empty:
                 resumo_vendas = df_vendas.groupby(['Ação', 'Horário']).agg(
