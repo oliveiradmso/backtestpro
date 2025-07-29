@@ -5,7 +5,7 @@ from datetime import datetime, time as time_obj, timedelta
 
 # Função para extrair nome completo do arquivo (sem .xlsx)
 def extrair_nome_completo(file_name):
-    return file_name.split(".")[0]  # Ex: 5-MIN_PETR4.xlsx → 5-MIN_PETR4
+    return file_name.split(".")[0]
 
 # Função para identificar o tipo de ativo
 def identificar_tipo(ticker):
@@ -71,8 +71,10 @@ def processar_backtest(
 
                 dias_unicos = pd.unique(df['data_sozinha'])
 
-                for i in range(len(dias_unicos)):
+                for i in range(1, len(dias_unicos)):  # Começa do índice 1 para garantir dia anterior
                     dia_atual = dias_unicos[i]
+                    dia_anterior = dias_unicos[i - 1]
+
                     df_dia_atual = df[df['data_sozinha'] == dia_atual].copy()
                     mascara_pregao = (df_dia_atual.index.time >= time_obj(9, 0)) & (df_dia_atual.index.time <= time_obj(17, 30))
                     df_pregao = df_dia_atual[mascara_pregao]
@@ -96,13 +98,6 @@ def processar_backtest(
                     preco_saida = df.loc[idx_saida]["open"]
 
                     referencia_valor = None
-                    try:
-                        idx_dia_atual_idx = list(dias_unicos).index(dia_atual)
-                        if idx_dia_atual_idx == 0:
-                            continue
-                        dia_anterior = dias_unicos[idx_dia_atual_idx - 1]
-                    except:
-                        continue
 
                     if referencia == "Fechamento do dia anterior":
                         try:
