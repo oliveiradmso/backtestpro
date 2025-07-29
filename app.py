@@ -371,7 +371,7 @@ if data_min_global and data_max_global:
         if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
 
-            # 🏆 Mercado Caiu - Ranking de Compras
+            # 📉 Mercado Caiu - Ranking de Compras
             df_compras = df_ops[df_ops['Direção'] == 'Compra']
             if not df_compras.empty:
                 resumo_compras = df_compras.groupby(['Ação', 'Horário']).agg(
@@ -388,10 +388,10 @@ if data_min_global and data_max_global:
                     'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
                 ]]
 
-                st.header("🏆 Mercado Caiu - Ranking de Compras")
+                st.header("📉 Mercado Caiu - Ranking de Compras")
                 st.dataframe(resumo_compras, use_container_width=True)
 
-            # 📉 Mercado Subiu - Ranking de Vendas
+            # 🏆 Mercado Subiu - Ranking de Vendas
             df_vendas = df_ops[df_ops['Direção'] == 'Venda']
             if not df_vendas.empty:
                 resumo_vendas = df_vendas.groupby(['Ação', 'Horário']).agg(
@@ -408,7 +408,7 @@ if data_min_global and data_max_global:
                     'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
                 ]]
 
-                st.header("📉 Mercado Subiu - Ranking de Vendas")
+                st.header("🏆 Mercado Subiu - Ranking de Vendas")
                 st.dataframe(resumo_vendas, use_container_width=True)
 
     # 6. Detalhamento por ação
