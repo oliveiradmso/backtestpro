@@ -5,7 +5,7 @@ from datetime import datetime, time as time_obj, timedelta
 
 # Função para extrair nome completo do arquivo (sem .xlsx)
 def extrair_nome_completo(file_name):
-    return file_name.split(".")[0]  # Ex: 5-MIN_PETR4.xlsx → 5-MIN_PETR4
+    return file_name.split(".")[0]
 
 # Função para identificar o tipo de ativo
 def identificar_tipo(ticker):
@@ -275,9 +275,7 @@ if data_min_global and data_max_global:
                 "15:15", "15:20", "15:25", "15:30", "15:35", "15:40", "15:45",
                 "15:50", "15:55", "16:00", "16:05", "16:10", "16:15", "16:20",
                 "16:25", "16:30", "16:35", "16:40", "16:45", "16:50", "16:55",
-                "17:00", "17:05", "17:10", "17:15", "17:20", "17:25", "17:30",
-                "17:35", "17:40", "17:45", "17:50", "17:55", "18:00", "18:05",
-                "18:10", "18:15", "18:20", "18:25", "18:30",
+                "17:00"
             ]
             horario_inicial, horario_final = "10:00", "17:00"
         else:
@@ -371,7 +369,7 @@ if data_min_global and data_max_global:
         if "todas_operacoes" in st.session_state and not st.session_state.todas_operacoes.empty:
             df_ops = st.session_state.todas_operacoes
 
-            # 📉 Mercado Caiu - Ranking de Compras
+            # 🏆 Ranking de Compras
             df_compras = df_ops[df_ops['Direção'] == 'Compra']
             if not df_compras.empty:
                 resumo_compras = df_compras.groupby(['Ação', 'Horário']).agg(
@@ -388,10 +386,10 @@ if data_min_global and data_max_global:
                     'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
                 ]]
 
-                st.header("📉 Mercado Caiu - Ranking de Compras")
+                st.header("🏆 Ranking de Compras")
                 st.dataframe(resumo_compras, use_container_width=True)
 
-            # 🏆 Mercado Subiu - Ranking de Vendas
+            # 📉 Ranking de Vendas
             df_vendas = df_ops[df_ops['Direção'] == 'Venda']
             if not df_vendas.empty:
                 resumo_vendas = df_vendas.groupby(['Ação', 'Horário']).agg(
@@ -408,7 +406,7 @@ if data_min_global and data_max_global:
                     'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
                 ]]
 
-                st.header("🏆 Mercado Subiu - Ranking de Vendas")
+                st.header("📉 Ranking de Vendas")
                 st.dataframe(resumo_vendas, use_container_width=True)
 
     # 6. Detalhamento por ação
