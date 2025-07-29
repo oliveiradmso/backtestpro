@@ -388,7 +388,7 @@ if data_min_global and data_max_global:
                     'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
                 ]]
 
-                st.header("🏆 Ranking de Compras")
+                st.header("🏆 Mercado Caiu - Ranking de Compras")
                 st.dataframe(resumo_compras, use_container_width=True)
 
             # 📉 Mercado Subiu - Ranking de Vendas
@@ -408,7 +408,7 @@ if data_min_global and data_max_global:
                     'Ação', 'Horário', 'Total_Eventos', 'Acertos', 'Taxa de Acerto', 'Lucro Total (R$)'
                 ]]
 
-                st.header("📉 Ranking de Vendas")
+                st.header("📉 Mercado Subiu - Ranking de Vendas")
                 st.dataframe(resumo_vendas, use_container_width=True)
 
     # 6. Detalhamento por ação
