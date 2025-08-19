@@ -67,15 +67,7 @@ if token:
     except Exception as e:
         st.error(f"❌ Falha ao conectar: {e}")
 
-    st.stop()  # Não executa o resto do appimport streamlit as st
-import pandas as pd
-import numpy as np
-from datetime import datetime, time as time_obj, timedelta
-import yfinance as yf
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import requests
-import random
-
+    st.stop()  # Não executa o resto do app
 # ========================
 # 🔗 CONFIGURAÇÃO DE URL
 # ========================
@@ -1456,4 +1448,3 @@ elif modo_sistema == "Diamante - Intraday":
                                 df_detalhe.style.apply(colorir_linhas, axis=1),
                                 use_container_width=True
                             )
-
