@@ -12,7 +12,6 @@ import random
 # ========================
 GOOGLE_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1wj5qNNuje6U8VJvRd5eclUNuVCZ4Oc_KDs6ezGBBCpg/gviz/tq?tqx=out:csv&sheet=Clientes"
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxuOaM6lWlDf8Z87y7PYKfpKsfz1pSFLU8s1y2zaJRlLZVB6KLvlixEqKC1zBH5ehIAMw/exec"
-
 # ========================
 # 🔁 FUNÇÃO PARA CARREGAR ASSINANTES
 # ========================
@@ -1387,3 +1386,4 @@ elif modo_sistema == "Diamante - Intraday":
                                 df_detalhe.style.apply(colorir_linhas, axis=1),
                                 use_container_width=True
                             )
+
