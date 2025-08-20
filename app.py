@@ -14,7 +14,7 @@ GOOGLE_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1wj5qNNuje6U8VJvRd5ec
 WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxuOaM6lWlDf8Z87y7PYKfpKsfz1pSFLU8s1y2zaJRlLZVB6KLvlixEqKC1zBH5ehIAMw/exec"
 
 # ========================
-# 🔁 FUNÇÃO PARA CARREGAR ASSINANTES (fora do token)
+# 🔁 FUNÇÃO PARA CARREGAR ASSINANTES
 # ========================
 @st.cache_data(ttl=600)
 def carregar_assinantes():
@@ -68,67 +68,7 @@ if token:
         st.error(f"❌ Falha ao conectar: {e}")
 
     st.stop()  # Não executa o resto do app
-# ========================
-# 🔗 CONFIGURAÇÃO DE URL
-# ========================
-GOOGLE_SHEET_CSV = "https://docs.google.com/spreadsheets/d/1wj5qNNuje6U8VJvRd5eclUNuVCZ4Oc_KDs6ezGBBCpg/gviz/tq?tqx=out:csv&sheet=Clientes"
-WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxuOaM6lWlDf8Z87y7PYKfpKsfz1pSFLU8s1y2zaJRlLZVB6KLvlixEqKC1zBH5ehIAMw/exec"
 
-# ========================
-# 🔁 FUNÇÃO PARA CARREGAR ASSINANTES (fora do token)
-# ========================
-@st.cache_data(ttl=600)
-def carregar_assinantes():
-    try:
-        df = pd.read_csv(GOOGLE_SHEET_CSV)
-        if 'expira_em' in df.columns:
-            df['expira_em'] = pd.to_datetime(df['expira_em'], errors='coerce')
-        return df
-    except Exception as e:
-        st.error("❌ Erro ao carregar assinantes.")
-        return pd.DataFrame()
-
-# ========================
-# 🔑 VERIFICAÇÃO DE TOKEN ANTES DE TUDO
-# ========================
-token = st.query_params.get("token", "")
-
-if token:
-    st.markdown("<h1 style='text-align: center;'>🔑 Ativando sua conta</h1>", unsafe_allow_html=True)
-
-    df = carregar_assinantes()
-    if df.empty:
-        st.error("❌ Falha ao carregar dados.")
-        st.stop()
-
-    user = df[df['token_confirmacao'] == token]
-
-    if user.empty:
-        st.error("❌ Token inválido ou já utilizado.")
-        st.stop()
-
-    if user.iloc[0]['ativo'] == 'SIM':
-        st.success("✅ Sua conta já foi ativada.")
-        st.info("Você pode fechar esta aba e acessar normalmente.")
-        st.stop()
-
-    # Ativa o usuário
-    df.loc[df['token_confirmacao'] == token, 'ativo'] = 'SIM'
-    df.loc[df['token_confirmacao'] == token, 'data_confirmacao'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    try:
-        linha = user.iloc[0].to_dict()
-        response = requests.post(WEBHOOK_URL, json=linha)
-        if response.status_code == 200:
-            st.success("✅ Parabéns! Sua conta foi ativada com sucesso.")
-            st.balloons()
-            st.info("Volte ao app e faça login com seu email e senha.")
-        else:
-            st.error("❌ Erro ao confirmar. Tente novamente.")
-    except Exception as e:
-        st.error(f"❌ Falha ao conectar: {e}")
-
-    st.stop()  # Não executa o resto do app                                    
 # ========================
 # FUNÇÕES AUXILIARES
 # ========================
@@ -151,7 +91,6 @@ def identificar_tipo(ticker):
         if acao in ticker:
             return 'acoes'
     return 'mini_dolar'
-
 # =====================================================
 # 🔹 RASTREAMENTO INTRADAY (5min)
 # =====================================================
